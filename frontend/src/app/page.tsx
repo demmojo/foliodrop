@@ -14,7 +14,7 @@ export default function Home() {
       {/* Editorial Header */}
       <header className="w-full flex justify-between items-center px-4 py-4 md:py-6 md:px-8 z-50 border-b border-border dark:border-zinc-800">
         <div className="flex gap-3 md:gap-4 items-baseline">
-          <h1 className="text-lg md:text-xl lg:text-2xl font-bold tracking-tight m-0 leading-none">{t('foliodrop')}</h1>
+          <h1 className="text-lg md:text-xl lg:text-2xl font-bold tracking-tight m-0 leading-none">{t('folio')}</h1>
           <span className="font-mono text-[9px] md:text-[10px] uppercase tracking-widest px-1.5 py-0.5 bg-foreground text-background rounded-sm">{t('beta')}</span>
         </div>
         <div className="flex items-center gap-3 md:gap-6">

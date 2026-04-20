@@ -6,8 +6,8 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'FolioDrop | Pro HDR Pipeline',
-  description: 'Next-gen FolioDrop HDR processing',
+  title: 'Folio | Pro HDR Pipeline',
+  description: 'Next-gen Folio HDR processing',
 };
 
 export default function RootLayout({

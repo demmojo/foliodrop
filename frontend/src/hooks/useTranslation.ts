@@ -14,7 +14,7 @@ export const useTranslationStore = create<TranslationStore>()(
       setLang: (lang) => set({ lang }),
     }),
     {
-      name: 'foliodrop-language',
+      name: 'folio-language',
     }
   )
 );

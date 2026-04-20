@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# GCP Deployment Script for FolioDrop Pipeline
+# GCP Deployment Script for Folio Pipeline
 # Ensures idempotency and strict DoS/Budget limits
 
 PROJECT_ID=$(gcloud config get-value project)

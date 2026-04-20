@@ -1,6 +1,6 @@
-# FolioDrop
+# Folio
 
-Next-Gen luxury serverless HDR platform for real estate agents and professional photographers. FolioDrop provides a "Pro Utility" interface to upload bracketed exposures (e.g., -2, 0, +2 EV) and process them into stunning, architecturally accurate HDR images using advanced optical flow and AI-driven grading.
+Next-Gen luxury serverless HDR platform for real estate agents and professional photographers. Folio provides a "Pro Utility" interface to upload bracketed exposures (e.g., -2, 0, +2 EV) and process them into stunning, architecturally accurate HDR images using advanced optical flow and AI-driven grading.
 
 ## Key Features
 
@@ -15,7 +15,7 @@ Next-Gen luxury serverless HDR platform for real estate agents and professional 
 
 ## Architecture
 
-FolioDrop is built on a highly scalable, local-cloud-hybrid architecture deployed to Google Cloud Platform (GCP).
+Folio is built on a highly scalable, local-cloud-hybrid architecture deployed to Google Cloud Platform (GCP).
 
 ### Frontend (Next.js)
 - **Framework**: Next.js 16 (App Router)
@@ -42,7 +42,7 @@ FolioDrop is built on a highly scalable, local-cloud-hybrid architecture deploye
 
 ## ⚠️ Production & Operational Context (Read Before Scaling)
 
-FolioDrop operates in a high-compute, data-heavy domain. Operating this at scale requires strict adherence to the following architectural constraints and business realities:
+Folio operates in a high-compute, data-heavy domain. Operating this at scale requires strict adherence to the following architectural constraints and business realities:
 
 ### 1. Compute Economics & Abuse Prevention
 HDR fusion (OpenCV/ONNX) is exceptionally CPU and RAM intensive. **This repository currently provides unauthenticated access to heavy GPU/CPU workloads.** 
@@ -69,7 +69,7 @@ The backend uses Server-Sent Events (SSE) to stream job progress to the UI.
 ## Project Structure
 
 ```
-foliodrop/
+folio/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/            # Next.js App Router (page.tsx, layout.tsx, globals.css)

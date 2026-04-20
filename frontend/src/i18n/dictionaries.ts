@@ -2,7 +2,7 @@ export type Language = 'en' | 'sk' | 'es' | 'it' | 'el';
 
 export const dictionaries: Record<Language, Record<string, string>> = {
   en: {
-    foliodrop: 'FolioDrop',
+    folio: 'Folio',
     beta: 'Beta',
     node_us_central1: 'Node: us-central1',
     loading_workspace: 'Loading workspace...',
@@ -54,7 +54,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     properties_detected: 'Properties Detected'
   },
   sk: {
-    foliodrop: 'FolioDrop',
+    folio: 'Folio',
     beta: 'Beta',
     node_us_central1: 'Uzol: us-central1',
     loading_workspace: 'Načítavanie pracovného priestoru...',
@@ -106,7 +106,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     properties_detected: 'Rozpoznané nehnuteľnosti'
   },
   es: {
-    foliodrop: 'FolioDrop',
+    folio: 'Folio',
     beta: 'Beta',
     node_us_central1: 'Nodo: us-central1',
     loading_workspace: 'Cargando espacio de trabajo...',
@@ -158,7 +158,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     properties_detected: 'Propiedades detectadas'
   },
   it: {
-    foliodrop: 'FolioDrop',
+    folio: 'Folio',
     beta: 'Beta',
     node_us_central1: 'Nodo: us-central1',
     loading_workspace: 'Caricamento spazio di lavoro...',
@@ -210,7 +210,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     properties_detected: 'Proprietà rilevate'
   },
   el: {
-    foliodrop: 'FolioDrop',
+    folio: 'Folio',
     beta: 'Beta',
     node_us_central1: 'Κόμβος: us-central1',
     loading_workspace: 'Φόρτωση χώρου εργασίας...',

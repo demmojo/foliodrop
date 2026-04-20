@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('FolioDrop App - Full Flow', () => {
+test.describe('Folio App - Full Flow', () => {
 
   test('completes full upload, processing, and review flow with real backend', async ({ page }) => {
     // 1. Navigate to the app
     await page.goto('/');
 
     // 2. Verify Initial State
-    await expect(page.locator('h1')).toContainText('FolioDrop');
+    await expect(page.locator('h1')).toContainText('Folio');
     await expect(page.getByText('Import Exposures', { exact: false })).toBeVisible();
 
     // 3. Simulate Drag and Drop to trigger Flow A (Confirmation Gate)
