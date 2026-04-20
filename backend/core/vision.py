@@ -67,16 +67,10 @@ def ai_review_and_edit(image: np.ndarray) -> np.ndarray:
     
     # 2. Subtle warming (simulating "inviting real estate" look)
     # Ensure it's 3-channel BGR before tweaking colors
-    if len(graded.shape) == 3 and graded.shape[2] == 3:
-        b, g, r = cv2.split(graded)
-        r = cv2.add(r, 10)
-        b = cv2.subtract(b, 5)
-        graded = cv2.merge((b, g, r))
-    elif len(graded.shape) == 3 and graded.shape[2] == 4:
-        # RGBA case
-        b, g, r, a = cv2.split(graded)
-        r = cv2.add(r, 10)
-        b = cv2.subtract(b, 5)
-        graded = cv2.merge((b, g, r, a))
+    if len(graded.shape) == 3 and (graded.shape[2] == 3 or graded.shape[2] == 4):
+        # In-place operations to avoid expensive cv2.split()
+        # BGR format: 0=Blue, 1=Green, 2=Red
+        cv2.add(graded[:, :, 2], 10, dst=graded[:, :, 2])
+        cv2.subtract(graded[:, :, 0], 5, dst=graded[:, :, 0])
         
     return graded

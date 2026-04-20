@@ -33,6 +33,7 @@ class ProcessHdrGroupUseCase:
             # Still enqueue for perspective correction or finalization
             await self.event_publisher.publish_progress(session_id, room, "PENDING_CORRECTION")
             self.task_queue.enqueue_perspective_correction(session_id, room)
+            await self.event_publisher.publish_progress(session_id, room, "COMPLETED")
             
             return {"status": "success", "room": room, "skipped_merge": True}
 
@@ -58,18 +59,24 @@ class ProcessHdrGroupUseCase:
             await self.event_publisher.publish_progress(session_id, room, "PENDING_CORRECTION")
             self.task_queue.enqueue_perspective_correction(session_id, room)
             
+            # Since perspective correction is mocked/not implemented, signal completion here to avoid hanging the UI
+            await self.event_publisher.publish_progress(session_id, room, "COMPLETED")
+            
             return {"status": "success", "room": room}
             
         except Exception as e:
             await self.event_publisher.publish_progress(session_id, room, "FAILED")
             return {"status": "error", "room": room, "message": str(e)}
         finally:
-            # Force memory cleanup
-            gc.collect()
-            try:
-                ctypes.CDLL('libc.so.6').malloc_trim(0)
-            except Exception:
-                pass
+            # Schedule memory cleanup off the main event loop if possible,
+            # or rely on normal Python GC to avoid freezing SSE streams.
+            def _cleanup():
+                gc.collect()
+                try:
+                    ctypes.CDLL('libc.so.6').malloc_trim(0)
+                except Exception:
+                    pass
+            await asyncio.to_thread(_cleanup)
 
 class StreamHDRProgressUseCase:
     def __init__(self, subscriber: IProgressSubscriber):
@@ -81,5 +88,8 @@ class StreamHDRProgressUseCase:
             yield message
             if message is not None:
                 status = message.get("status")
-                if status in ("COMPLETED", "FAILED", "CANCELLED"):
+                # We no longer break the stream on COMPLETED for individual rooms,
+                # as there may be multiple rooms processing concurrently. The client will
+                # close the SSE connection when it receives the expected number of completed rooms.
+                if status in ("JOB_FINISHED", "FAILED", "CANCELLED"):
                     break

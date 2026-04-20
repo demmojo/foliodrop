@@ -1,0 +1,89 @@
+{
+  "reviewer": "adversarial",
+  "findings": [
+    {
+      "title": "Cascade: Single room failure closes SSE stream for entire job session",
+      "severity": "high",
+      "confidence": 0.95,
+      "autofix_class": "advisory",
+      "owner": "human",
+      "evidence": [
+        "In `ProcessHdrGroupUseCase`, an exception during HDR fusion triggers `await self.event_publisher.publish_progress(session_id, room, \"FAILED\")`.",
+        "In `main.py`, `stream_hdr_progress` listens to the session channel and executes `if message.get(\"status\") in (\"COMPLETED\", \"FAILED\", \"CANCELLED\"): break`, which terminates the SSE generator.",
+        "If a session contains 10 rooms and room 1 fails, the SSE connection is permanently closed. The frontend `ProcessingConsole` receives `FAILED` but the server drops the connection, triggering an `onerror` event in the browser.",
+        "The frontend `onerror` handler calls `onComplete()` without arguments, instantly jumping to the REVIEW state with fake placeholder data, abandoning the 9 rooms still processing in the background."
+      ]
+    },
+    {
+      "title": "Composition Failure: Missing terminal signal causes infinite hang and mock data fallback",
+      "severity": "critical",
+      "confidence": 0.95,
+      "autofix_class": "advisory",
+      "owner": "human",
+      "evidence": [
+        "In `ProcessHdrGroupUseCase`, a successful room processing ends with publishing `PENDING_CORRECTION` and enqueueing perspective correction.",
+        "`CloudTasksAdapter.enqueue_perspective_correction` is a `pass` stub.",
+        "No component in the backend ever publishes `COMPLETED` or `FINISHED` to the Redis Pub/Sub channel.",
+        "The frontend `ProcessingConsole` waits indefinitely for `COMPLETED`. Eventually, the reverse proxy or browser times out the idle SSE connection, triggering `onerror`.",
+        "This forces the frontend to call `onComplete()` with no arguments, meaning the user will NEVER see real processed photos even when the backend perfectly executes the job."
+      ]
+    },
+    {
+      "title": "Contract Mismatch: Hardcoded JPEG Content-Type silently rejects valid image uploads",
+      "severity": "high",
+      "confidence": 0.90,
+      "autofix_class": "advisory",
+      "owner": "human",
+      "evidence": [
+        "Frontend `handleDrop` allows any file where `file.type.startsWith('image/')` (e.g., `image/png`, `image/webp`).",
+        "Backend `GCSBlobStorageAdapter.generate_upload_urls` hardcodes `content_type=\"image/jpeg\"` when generating the V4 signed URL.",
+        "Frontend blindly executes `fetch(url, { method: \"PUT\", headers: { \"Content-Type\": file.type }, body: file })`.",
+        "GCS rejects non-JPEG uploads with `403 SignatureDoesNotMatch`. The frontend `Promise.all` does not check `res.ok`, silently swallowing the error.",
+        "Frontend signals `/api/jobs/{sessionId}/finalize`, instructing the backend to process blobs that were never successfully uploaded, causing downstream pipeline crashes."
+      ]
+    },
+    {
+      "title": "Resource Exhaustion Cascade: Synchronous malloc_trim freezes concurrent event loop",
+      "severity": "critical",
+      "confidence": 0.95,
+      "autofix_class": "advisory",
+      "owner": "human",
+      "evidence": [
+        "FastAPI operates on an asynchronous event loop handling multiple concurrent requests (SSE heartbeats, Cloud Tasks webhooks).",
+        "`ProcessHdrGroupUseCase` executes `ctypes.CDLL('libc.so.6').malloc_trim(0)` synchronously in its `finally` block for every processed room.",
+        "`malloc_trim(0)` pauses all threads in the Python process to return freed memory to the OS.",
+        "Under load, this repeatedly blocks the event loop, causing SSE connections to drop and Cloud Tasks requests to timeout.",
+        "Timeouts cause Cloud Tasks to retry the HTTP requests, creating a retry storm that permanently exhausts the server's processing capacity."
+      ]
+    },
+    {
+      "title": "State Corruption: Unsafe filename sanitization overwrites exposure brackets",
+      "severity": "medium",
+      "confidence": 0.85,
+      "autofix_class": "advisory",
+      "owner": "human",
+      "evidence": [
+        "User uploads files with special characters (e.g., `IMG@001.JPG` and `IMG#001.JPG`) or identical names from different folders.",
+        "Frontend only sends `file.name` to `/api/upload-urls`.",
+        "Backend `GCSBlobStorageAdapter` strips non-alphanumeric characters (`re.sub(r'[^a-zA-Z0-9_.-]', '', file)`), causing both files to resolve to `session_id/IMG001.JPG`.",
+        "Backend returns two signed URLs pointing to the exact same GCS destination.",
+        "Frontend concurrently PUTs two different brackets to the same path. One overwrites the other, silently corrupting the HDR fusion pipeline by omitting necessary exposure data."
+      ]
+    },
+    {
+      "title": "Abuse Case: Unbounded concurrent uploads exhaust client connections",
+      "severity": "medium",
+      "confidence": 0.90,
+      "autofix_class": "advisory",
+      "owner": "human",
+      "evidence": [
+        "Frontend `handleDrop` iterates over all dropped files and executes `Promise.all(files.map(file => fetch(...)))`.",
+        "If a user drops 500 exposures, the browser attempts to open 500 concurrent HTTP PUT requests.",
+        "This exhausts the browser's connection pool (typically 6 per domain), spikes local memory as files are read, stalls network queues, and risks GCS `429 Too Many Requests`.",
+        "Because the `fetch` calls lack error boundary checks for `res.ok`, dropped requests silently fail."
+      ]
+    }
+  ],
+  "residual_risks": [],
+  "testing_gaps": []
+}

@@ -6,10 +6,11 @@ import { useTranslation } from '../hooks/useTranslation';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
+  expectedRooms?: number;
   onComplete: (data?: any) => void;
 }
 
-export default function ProcessingConsole({ sessionId, onComplete }: ProcessingConsoleProps) {
+export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComplete }: ProcessingConsoleProps) {
   const { t } = useTranslation();
   
   const statusLabels = useMemo<Record<string, string>>(() => ({
@@ -45,15 +46,24 @@ export default function ProcessingConsole({ sessionId, onComplete }: ProcessingC
     } else {
       // Real SSE progression
       const eventSource = new EventSource(`${API_URL}/api/v1/hdr-jobs/${sessionId}/progress`);
+      let completedRooms = 0;
+      const allResults: any[] = [];
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.status === 'COMPLETED' || data.status === 'FINISHED') {
-           eventSource.close();
-           setRealProgress(100);
-           setStatusMessage(t('status_completed'));
-           // the payload usually contains the final URLs
-           setTimeout(() => onComplete(data.result || data.results || []), 800);
+           completedRooms++;
+           if (data.result) allResults.push(data.result);
+           
+           if (completedRooms >= expectedRooms || data.status === 'JOB_FINISHED') {
+             eventSource.close();
+             setRealProgress(100);
+             setStatusMessage(t('status_completed'));
+             setTimeout(() => onComplete(allResults), 800);
+           } else {
+             setRealProgress(Math.floor((completedRooms / expectedRooms) * 100));
+             setStatusMessage(`${t('status_completed')} (${completedRooms}/${expectedRooms})`);
+           }
         } else {
            // E.g. {"status": "ALIGNING", "room": "kitchen", "progress": 20}
            if (data.progress !== undefined) {
