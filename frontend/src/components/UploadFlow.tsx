@@ -305,10 +305,10 @@ export default function UploadFlow() {
         {flowState === 'IDLE' && (
           <div className="text-center animate-in fade-in duration-300 pointer-events-none max-w-3xl mx-auto px-4 sm:px-6 w-full">
             <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground mb-4 sm:mb-6 tracking-tight leading-[1.1]">
-              Import Exposures
+              {t('import_exposures')}
             </h2>
             <p className="text-muted font-sans tracking-wide text-sm md:text-base max-w-md mx-auto leading-relaxed">
-              Drag and drop your bracketed sequences. Our engine will align, fuse, and color-grade to architectural standards.
+              {t('drop_brackets')}
             </p>
 
             {/* Manual Resume UI */}
@@ -326,7 +326,7 @@ export default function UploadFlow() {
                     onClick={() => handleResumeSession(resumeInput)}
                     className="bg-foreground text-background px-6 py-3 text-[10px] font-bold tracking-[0.15em] uppercase hover:bg-foreground/90 transition-colors shadow-sm w-full sm:w-auto"
                   >
-                    Load
+                    {t('load')}
                   </button>
                 </div>
               ) : (
@@ -334,7 +334,7 @@ export default function UploadFlow() {
                   onClick={(e) => { e.stopPropagation(); setShowResumeInput(true); }}
                   className="text-muted font-sans text-[10px] tracking-[0.15em] uppercase hover:text-foreground transition-colors border-b border-transparent hover:border-foreground pb-0.5"
                 >
-                  Resume Previous Session
+                  {t('resume_previous_session')}
                 </button>
               )}
             </div>
@@ -349,7 +349,7 @@ export default function UploadFlow() {
           : "opacity-0 scale-95 translate-y-4 pointer-events-none absolute"
       )}>
         <div className="text-center mb-12">
-          <div className="text-muted font-sans text-[10px] tracking-[0.2em] uppercase mb-4 font-semibold">Sequence Identified</div>
+          <div className="text-muted font-sans text-[10px] tracking-[0.2em] uppercase mb-4 font-semibold">{t('sequence_identified')}</div>
           <h3 className="text-3xl font-bold text-foreground tracking-tight">{t('ready_for_fusion')}</h3>
         </div>
         
@@ -374,13 +374,13 @@ export default function UploadFlow() {
             data-testid="begin-processing"
             className="w-full py-4 bg-accent text-white font-sans text-[10px] font-bold tracking-[0.15em] uppercase hover:bg-blue-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent focus-visible:ring-offset-background shadow-sm"
           >
-            Commence Processing
+            {t('commence_processing')}
           </button>
           <button 
             onClick={() => setFlowState('IDLE')}
             className="w-full py-3 text-muted font-sans text-xs tracking-[0.1em] uppercase hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-foreground focus-visible:ring-offset-background"
           >
-            Cancel
+            {t('cancel')}
           </button>
         </div>
       </div>

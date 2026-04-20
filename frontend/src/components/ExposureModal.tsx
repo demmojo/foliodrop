@@ -84,13 +84,13 @@ export default function ExposureModal({ photo, isOpen, onClose }: ExposureModalP
                 {formattedTime}
               </span>
               <div className="w-px h-3 bg-zinc-800 shrink-0"></div>
-              <span className="shrink-0">HDR Fusion Engine</span>
+              <span className="shrink-0">{t('hdr_fusion_engine')}</span>
               <div className="w-px h-3 bg-zinc-800 shrink-0"></div>
               <span className="text-accent flex items-center gap-1.5 shrink-0">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
                   <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                 </svg>
-                Critical Inspection
+                {t('critical_inspection')}
               </span>
             </div>
           </div>
@@ -100,7 +100,7 @@ export default function ExposureModal({ photo, isOpen, onClose }: ExposureModalP
             className="absolute sm:relative top-3 right-4 sm:top-auto sm:right-auto flex items-center gap-2 px-3 py-1.5 rounded-sm text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-muted group"
             aria-label="Close modal"
           >
-            <span className="font-mono text-[10px] uppercase tracking-widest">Close</span>
+            <span className="font-mono text-[10px] uppercase tracking-widest">{t('close') || 'Close'}</span>
             <kbd className="hidden sm:inline-flex items-center justify-center font-sans text-[10px] bg-zinc-800/80 px-1.5 py-0.5 rounded border border-zinc-700/50 group-hover:bg-zinc-700/50 group-hover:border-zinc-600 transition-colors">{t('esc')}</kbd>
           </button>
         </div>

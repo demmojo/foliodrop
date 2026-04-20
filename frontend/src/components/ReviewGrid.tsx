@@ -151,7 +151,7 @@ export default function ReviewGrid({
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
               </svg>
-              Copy Link
+              {t('copy_link') || 'Copy Link'}
             </button>
           </div>
           <div className="flex items-center justify-between w-full sm:w-auto gap-4 sm:gap-6 mt-2 sm:mt-0 pt-3 sm:pt-0 border-t border-surface sm:border-0">
@@ -197,7 +197,7 @@ export default function ReviewGrid({
 
             <div className="flex items-end justify-between border-b border-border pb-4">
               <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">
-                Property <span className="text-muted font-sans text-lg ml-2">{displayId}</span>
+                {t('property')} <span className="text-muted font-sans text-lg ml-2">{displayId}</span>
               </h2>
               <button 
                 onClick={() => handleExport(groupId, displayId, groupPhotos)}
