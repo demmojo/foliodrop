@@ -58,19 +58,49 @@ def tiled_onnx_denoise(image: np.ndarray) -> np.ndarray:
 def ai_review_and_edit(image: np.ndarray) -> np.ndarray:
     if cv2 is None:
         raise ImportError("cv2 is required")
-    print("Running AI Review & Grading (Mock Gemini 2.5 Flash / ControlNet)")
+    print("Running AI Review & Grading (Airy, Crisp, Vibrant)")
     
-    # 1. Slight contrast boost (simulating HDR pop)
-    alpha = 1.05 # Contrast control
-    beta = 5     # Brightness control
-    graded = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+    # Handle alpha channel if present
+    has_alpha = len(image.shape) == 3 and image.shape[2] == 4
+    if has_alpha:
+        img_bgr = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+    else:
+        img_bgr = image.copy()
+
+    # 1. Subtle Denoise (Bilateral Filter)
+    # Preserves edges while reducing high-ISO noise before sharpening.
+    img_bgr = cv2.bilateralFilter(img_bgr, d=5, sigmaColor=25, sigmaSpace=25)
+
+    # 2. Balanced Lighting & Lighter Airy Feel (CLAHE on L channel in LAB)
+    # Lifts shadows and equalizes lighting without blowing out window highlights.
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
     
-    # 2. Subtle warming (simulating "inviting real estate" look)
-    # Ensure it's 3-channel BGR before tweaking colors
-    if len(graded.shape) == 3 and (graded.shape[2] == 3 or graded.shape[2] == 4):
-        # In-place operations to avoid expensive cv2.split()
-        # BGR format: 0=Blue, 1=Green, 2=Red
-        cv2.add(graded[:, :, 2], 10, dst=graded[:, :, 2])
-        cv2.subtract(graded[:, :, 0], 5, dst=graded[:, :, 0])
-        
-    return graded
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8))
+    cl = clahe.apply(l)
+    
+    lab_merged = cv2.merge((cl, a, b))
+    img_bgr = cv2.cvtColor(lab_merged, cv2.COLOR_LAB2BGR)
+
+    # 3. Slightly More Vibrant/Alive (Saturation boost in HSV)
+    # Use float32 to prevent overflow during multiplication
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+    # 15% increase in saturation, safely clipped
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.15, 0, 255)
+    img_bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+    # 4. Crisp (Unsharp Masking)
+    # Subtracts a blurred version of the image to enhance edges cleanly.
+    gaussian_blur = cv2.GaussianBlur(img_bgr, (0, 0), 1.5)
+    img_bgr = cv2.addWeighted(img_bgr, 1.25, gaussian_blur, -0.25, 0)
+    
+    # 5. Final safety clip
+    img_bgr = np.clip(img_bgr, 0, 255).astype(np.uint8)
+
+    # Re-attach alpha if it was there
+    if has_alpha:
+        b_ch, g_ch, r_ch = cv2.split(img_bgr)
+        alpha = image[:, :, 3]
+        return cv2.merge((b_ch, g_ch, r_ch, alpha))
+    
+    return img_bgr

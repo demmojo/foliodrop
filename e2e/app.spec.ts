@@ -8,7 +8,7 @@ test.describe('Folio App - Full Flow', () => {
 
     // 2. Verify Initial State
     await expect(page.locator('h1')).toContainText('Folio');
-    await expect(page.getByText('Import Exposures', { exact: false })).toBeVisible();
+    await expect(page.getByText('Upload Photos', { exact: false })).toBeVisible();
 
     // 3. Simulate Drag and Drop to trigger Flow A (Confirmation Gate)
     // Instead of mocking, we let it hit the real `uvicorn` backend running with TESTING=true
@@ -33,8 +33,8 @@ test.describe('Folio App - Full Flow', () => {
     });
 
     // 4. Verify Confirmation Gate and stats (3 brackets -> 1 photo)
-    await expect(page.getByText('Ready for Fusion')).toBeVisible();
-    await expect(page.getByText('Raw Brackets')).toBeVisible();
+    await expect(page.getByText('Ready to Enhance')).toBeVisible();
+    await expect(page.getByText('Uploaded Photos')).toBeVisible();
     await expect(page.getByText('3', { exact: true })).toBeVisible(); // 3 brackets
 
     // 5. Start Processing
@@ -43,11 +43,11 @@ test.describe('Folio App - Full Flow', () => {
     await startButton.click();
 
     // 6. Verify Processing Console (Flow B)
-    await expect(page.getByText('Crafting Imagery')).toBeVisible();
+    await expect(page.getByText('Enhancing Photos')).toBeVisible();
     
     // The console takes ~2.5 seconds to complete (6 stages * 0.4s delay)
     // We wait for the review grid to appear
-    await expect(page.getByText('Curated Exposures')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Your Enhanced Photos')).toBeVisible({ timeout: 10000 });
 
     // 7. Verify Review Grid (Flow C)
     await expect(page.getByText('Property')).toBeVisible();

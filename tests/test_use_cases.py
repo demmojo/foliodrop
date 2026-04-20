@@ -46,9 +46,9 @@ async def test_process_hdr_group_use_case():
     assert result["status"] == "success"
     assert result["room"] == "kitchen"
 
-    assert len(event_publisher.events) == 6
+    assert len(event_publisher.events) == 7
     assert event_publisher.events[0]["status"] == "ALIGNING"
-    assert event_publisher.events[-1]["status"] == "PENDING_CORRECTION"
+    assert event_publisher.events[-1]["status"] == "COMPLETED"
     
     assert len(task_queue.tasks) == 1
     assert task_queue.tasks[0]["type"] == "perspective_correction"
@@ -69,7 +69,7 @@ async def test_process_hdr_group_skip_merge_use_case():
     assert result.get("skipped_merge") is True
     assert result["room"] == "single-photo-room"
     
-    assert len(event_publisher.events) == 2
+    assert len(event_publisher.events) == 3
     assert event_publisher.events[0]["status"] == "SKIPPING_HDR_MERGE"
     assert event_publisher.events[1]["status"] == "PENDING_CORRECTION"
     
