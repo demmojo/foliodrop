@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root {
+  --background: #fafafa; /* Zinc-50 */
+  --surface: #ffffff; /* Pure White */
+  --foreground: #18181b; /* Zinc-900 */
+  --accent: #2563EB; /* Crisp Blue */
+  --success: #16a34a; /* Green-600 */
+  --warning: #ea580c; /* Orange-600 */
+  --muted: #52525b; /* Zinc-600 */
+  --border: #e4e4e7; /* Zinc-200 */
+
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.dark {
+  --background: #09090b; /* Zinc-950 */
+  --surface: #18181b; /* Zinc-900 */
+  --foreground: #fafafa; /* Zinc-50 */
+  --accent: #3b82f6; /* Blue-500 */
+  --success: #22c55e; /* Green-500 */
+  --warning: #f97316; /* Orange-500 */
+  --muted: #a1a1aa; /* Zinc-400 */
+  --border: #27272a; /* Zinc-800 */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
