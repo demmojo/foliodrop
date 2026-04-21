@@ -78,6 +78,26 @@ class FirestoreAdapter(IDatabase):
             results.extend([doc.to_dict() for doc in docs])
         return results
 
+    def get_agency_quota(self, agency_id: str) -> dict:
+        doc = self.db.collection("quotas").document(agency_id).get()
+        if doc.exists:
+            return doc.to_dict()
+        return {"used": 0, "limit": 3000}
+
+    def increment_quota_usage(self, agency_id: str, amount: int) -> bool:
+        doc_ref = self.db.collection("quotas").document(agency_id)
+        doc = doc_ref.get()
+        if doc.exists:
+            data = doc.to_dict()
+            if data.get("used", 0) + amount > data.get("limit", 3000):
+                return False
+            doc_ref.update({"used": data.get("used", 0) + amount})
+        else:
+            if amount > 3000:
+                return False
+            doc_ref.set({"used": amount, "limit": 3000})
+        return True
+
 class GCSBlobStorageAdapter(IBlobStorage):
     def __init__(self, bucket_name: str):
         self.client = storage.Client()

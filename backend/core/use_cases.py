@@ -28,6 +28,7 @@ class FinalizeJobUseCase:
             
         groups = group_photos(photos)
         job_ids = []
+        new_jobs = []
         
         for idx, group in enumerate(groups):
             room_name = f"Scene {idx + 1}"
@@ -43,10 +44,16 @@ class FinalizeJobUseCase:
             if existing_job:
                 job_ids.append(existing_job["id"])
                 continue
+            new_jobs.append((group_job_id, group_idemp_key, room_name, filenames))
                 
-            self.db.save_job(group_job_id, session_id, "PENDING", group_idemp_key)
-            self.task_queue.enqueue_job(group_job_id, session_id, room_name, filenames)
-            job_ids.append(group_job_id)
+        if new_jobs:
+            if not self.db.increment_quota_usage("default", len(new_jobs)):
+                return {"status": "quota_exceeded", "message": "Monthly quota limit of 3000 HDR generations reached."}
+
+            for group_job_id, group_idemp_key, room_name, filenames in new_jobs:
+                self.db.save_job(group_job_id, session_id, "PENDING", group_idemp_key)
+                self.task_queue.enqueue_job(group_job_id, session_id, room_name, filenames)
+                job_ids.append(group_job_id)
             
         return {"status": "enqueued", "job_ids": job_ids, "tasks_count": len(groups)}
 

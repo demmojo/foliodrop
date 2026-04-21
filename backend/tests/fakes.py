@@ -7,6 +7,7 @@ class FakeDatabase(IDatabase):
         self.sessions = {}
         self.results = {}
         self.jobs = {}
+        self.quotas = {"default": {"used": 0, "limit": 3000}}
         
     def save_session(self, session_id: str, data: dict):
         self.sessions[session_id] = data
@@ -45,6 +46,16 @@ class FakeDatabase(IDatabase):
 
     def get_jobs(self, job_ids: List[str]) -> List[dict]:
         return [self.jobs[jid] for jid in job_ids if jid in self.jobs]
+
+    def get_agency_quota(self, agency_id: str) -> dict:
+        return self.quotas.get(agency_id, {"used": 0, "limit": 3000})
+
+    def increment_quota_usage(self, agency_id: str, amount: int) -> bool:
+        quota = self.quotas.setdefault(agency_id, {"used": 0, "limit": 3000})
+        if quota["used"] + amount > quota["limit"]:
+            return False
+        quota["used"] += amount
+        return True
 
 class FakeBlobStorage(IBlobStorage):
     def generate_upload_urls(self, session_id: str, files: List[str]) -> List[dict]:

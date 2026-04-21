@@ -19,12 +19,19 @@ interface Job {
   error?: string;
 }
 
+interface Quota {
+  used: number;
+  limit: number;
+}
+
 interface JobStore {
   jobs: Record<string, Job>;
   activeSessionId: string | null;
+  quota: Quota | null;
   addJobs: (ids: string[], sessionId: string) => void;
   rehydrateSession: (sessionId: string) => Promise<void>;
   pollDueJobs: () => Promise<void>;
+  fetchQuota: () => Promise<void>;
   setJobs: (jobs: Record<string, Job>) => void;
   setSessionId: (id: string | null) => void;
 }
@@ -34,9 +41,22 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 export const useJobStore = create<JobStore>((set, get) => ({
   jobs: {},
   activeSessionId: null,
+  quota: null,
   
   setJobs: (jobs) => set({ jobs }),
   setSessionId: (id) => set({ activeSessionId: id }),
+
+  fetchQuota: async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/quota`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ quota: data });
+      }
+    } catch (e) {
+      console.error("Failed to fetch quota", e);
+    }
+  },
 
   addJobs: (ids, sessionId) => {
     const now = Date.now();

@@ -23,7 +23,11 @@ export default function UploadFlow() {
   const urlSessionId = searchParams.get('session');
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-  const { jobs, activeSessionId, setSessionId, rehydrateSession, addJobs, setJobs } = useJobStore();
+  const { jobs, activeSessionId, setSessionId, rehydrateSession, addJobs, setJobs, quota, fetchQuota } = useJobStore();
+
+  useEffect(() => {
+    fetchQuota();
+  }, [fetchQuota]);
 
   // Derived state for processed photos
   const processedPhotos = Object.values(jobs)
@@ -115,18 +119,33 @@ export default function UploadFlow() {
   }, []);
 
   const processUpload = async () => {
+    const estRooms = Math.max(1, Math.floor(uploadedFiles.length / 5));
+    if (quota && quota.used + estRooms > quota.limit) {
+      alert(`Quota Exceeded! You have ${quota.limit - quota.used} runs remaining this month, but are trying to process ${estRooms} scenes.`);
+      return;
+    }
+
     setFlowState('PROCESSING');
     try {
       const sid = crypto.randomUUID();
       setSessionId(sid);
       
       const fileNames = uploadedFiles.map(f => f.name);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'769fb2'},body:JSON.stringify({sessionId:'769fb2',location:'frontend/src/components/UploadFlow.tsx:124',message:'fetching upload urls',data:{api_url: API_URL},hypothesisId:'H2',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
       const urlRes = await fetch(`${API_URL}/api/v1/upload-urls`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sid, files: fileNames })
       });
       const urlData = await urlRes.json();
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'769fb2'},body:JSON.stringify({sessionId:'769fb2',location:'frontend/src/components/UploadFlow.tsx:130',message:'upload urls received',data:{urlData},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       await Promise.all(uploadedFiles.map(async (file, idx) => {
          const uploadData = urlData.urls[idx];
@@ -157,6 +176,11 @@ export default function UploadFlow() {
 
     } catch (err) {
       console.error(err);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'769fb2'},body:JSON.stringify({sessionId:'769fb2',location:'frontend/src/components/UploadFlow.tsx:160',message:'upload failed',data:{error: err?.toString()},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
       showToast("Upload failed");
       setFlowState('IDLE');
     }
@@ -202,34 +226,43 @@ export default function UploadFlow() {
       )}
 
       {flowState === 'IDLE' && (
-        <div 
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={clsx(
-            "w-full max-w-4xl p-8 md:p-24 border-2 border-dashed rounded-xl transition-all duration-300 flex flex-col items-center justify-center text-center",
-            isDragging ? "border-amber-500 bg-amber-500/5 scale-[1.02]" : "border-border/50 bg-secondary/20 hover:border-border hover:bg-secondary/30"
+        <div className="w-full flex flex-col items-center">
+          {quota && (
+            <div className="mb-6 px-4 py-2 bg-secondary/30 border border-border/50 rounded-full text-sm flex items-center gap-2">
+               <span className="text-muted-foreground">Monthly Usage:</span>
+               <span className="font-semibold text-amber-600 dark:text-amber-400">{quota.used} / {quota.limit}</span>
+               <span className="text-muted-foreground ml-1">HDR Scenes ($500 cap)</span>
+            </div>
           )}
-        >
-           <h2 className="text-2xl font-light tracking-tight mb-2">Drop bracketed photos here</h2>
-           <p className="text-muted-foreground text-sm mb-6">We'll group, align, and fuse them automatically.</p>
-           
-           <div className="relative">
-             <input 
-               type="file" 
-               multiple 
-               accept="image/*" 
-               id="mobile-file-upload" 
-               className="hidden" 
-               onChange={handleFileInput} 
-             />
-             <label 
-               htmlFor="mobile-file-upload" 
-               className="px-6 py-3 bg-foreground text-background hover:bg-foreground/90 transition-colors rounded-full font-medium cursor-pointer text-sm uppercase tracking-wider shadow-sm"
-             >
-               Browse Photos
-             </label>
-           </div>
+          <div 
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={clsx(
+              "w-full max-w-4xl p-8 md:p-24 border-2 border-dashed rounded-xl transition-all duration-300 flex flex-col items-center justify-center text-center",
+              isDragging ? "border-amber-500 bg-amber-500/5 scale-[1.02]" : "border-border/50 bg-secondary/20 hover:border-border hover:bg-secondary/30"
+            )}
+          >
+             <h2 className="text-2xl font-light tracking-tight mb-2">Drop bracketed photos here</h2>
+             <p className="text-muted-foreground text-sm mb-6">We'll group, align, and fuse them automatically.</p>
+             
+             <div className="relative">
+               <input 
+                 type="file" 
+                 multiple 
+                 accept="image/*" 
+                 id="mobile-file-upload" 
+                 className="hidden" 
+                 onChange={handleFileInput} 
+               />
+               <label 
+                 htmlFor="mobile-file-upload" 
+                 className="px-6 py-3 bg-foreground text-background hover:bg-foreground/90 transition-colors rounded-full font-medium cursor-pointer text-sm uppercase tracking-wider shadow-sm"
+               >
+                 Browse Photos
+               </label>
+             </div>
+          </div>
         </div>
       )}
 

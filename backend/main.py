@@ -32,7 +32,26 @@ app.add_middleware(
 # -----------------------------------------------------------------------------
 # Dependency Injection
 # -----------------------------------------------------------------------------
+# #region agent log
+import json, time
+def _log_debug(message: str, data: dict = None, hyp: str = "H1"):
+    try:
+        payload = {
+            "sessionId": "769fb2",
+            "hypothesisId": hyp,
+            "location": "backend/main.py",
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time.time() * 1000)
+        }
+        with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# #endregion
+
 def get_database() -> IDatabase:
+    _log_debug("get_database invoked", hyp="H3")
     from backend.tests.fakes import FakeDatabase
     # In a real app, use a singleton or app state for fake DB to persist across requests
     if not hasattr(app.state, "db"):
@@ -40,10 +59,12 @@ def get_database() -> IDatabase:
     return app.state.db
 
 def get_blob_storage() -> IBlobStorage:
+    _log_debug("get_blob_storage invoked", hyp="H1")
     from backend.tests.fakes import FakeBlobStorage
     return FakeBlobStorage()
 
 def get_task_queue() -> ITaskQueue:
+    _log_debug("get_task_queue invoked", hyp="H2")
     from backend.tests.fakes import FakeTaskQueue
     return FakeTaskQueue()
 
@@ -82,7 +103,12 @@ class BatchSignedUrlRequest(BaseModel):
 def generate_upload_urls(req: UploadUrlRequest, storage: IBlobStorage = Depends(get_blob_storage)):
     use_case = GenerateUploadUrlsUseCase(storage)
     urls = use_case.execute(req.session_id, req.files)
+    _log_debug("generate_upload_urls returning", {"urls": urls}, hyp="H1")
     return {"urls": urls}
+
+@app.get("/api/v1/quota")
+def get_quota(db: IDatabase = Depends(get_database)):
+    return db.get_agency_quota("default")
 
 @app.post("/api/v1/finalize-job", status_code=status.HTTP_202_ACCEPTED)
 def finalize_job(
@@ -97,6 +123,10 @@ def finalize_job(
 
     use_case = FinalizeJobUseCase(task_queue, db)
     result = use_case.execute(req.session_id, req.idempotency_key, req.files)
+    
+    if result.get("status") == "quota_exceeded":
+        raise HTTPException(status_code=402, detail=result.get("message", "Monthly quota exceeded"))
+        
     return result
 
 @app.post("/api/v1/jobs/process")
