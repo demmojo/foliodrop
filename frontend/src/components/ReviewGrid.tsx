@@ -137,8 +137,8 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
               <div className="flex-1 overflow-hidden relative flex items-center justify-center p-4 md:p-8">
                  <div className="w-full max-w-6xl aspect-[3/2] relative bg-[#111]">
                     <BeforeAfterSlider 
-                       beforeImage={loupeImage.originalUrl || loupeImage.url} 
-                       afterImage={loupeImage.url} 
+                       beforeUrl={loupeImage.originalUrl || loupeImage.url} 
+                       afterUrl={loupeImage.url} 
                     />
                  </div>
               </div>
