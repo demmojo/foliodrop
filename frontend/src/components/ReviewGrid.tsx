@@ -10,9 +10,10 @@ interface ReviewGridProps {
   onConfirm: () => void;
   onDiscardItem?: (id: string) => void;
   onKeepItem?: (id: string) => void;
+  onOverrideWithManualEdit?: (id: string, file: File) => void;
 }
 
-export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem }: ReviewGridProps) {
+export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem, onOverrideWithManualEdit }: ReviewGridProps) {
   const [loupeImage, setLoupeImage] = useState<ProcessedHDR | null>(null);
 
   const reviewQueue = photos.filter(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED');
@@ -82,6 +83,21 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                 <div className="flex justify-between items-center mt-1">
                     <span className="text-sm font-medium truncate pr-2">{photo.roomName}</span>
                     <div className="flex gap-2 flex-shrink-0">
+                        {onOverrideWithManualEdit && (
+                            <label className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 hover:bg-blue-500/20 dark:hover:bg-blue-500/40 transition-colors cursor-pointer" title="Override with Manual Edit">
+                                ✏️ Override
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            onOverrideWithManualEdit(photo.id, e.target.files[0]);
+                                        }
+                                    }}
+                                />
+                            </label>
+                        )}
                         {onKeepItem && (
                             <button onClick={() => onKeepItem(photo.id)} className="text-xs px-2 py-1 rounded bg-muted/20 hover:bg-muted/40 transition-colors" title="Dismiss Flag">
                                 ✓ Keep
@@ -171,6 +187,22 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                  </div>
               </div>
               <div className="p-4 border-t border-white/10 flex justify-center gap-2 sm:gap-4 bg-[#111] pb-safe">
+                 {onOverrideWithManualEdit && (
+                     <label className="px-4 sm:px-6 py-3 sm:py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none text-center cursor-pointer">
+                         Override
+                         <input 
+                             type="file" 
+                             accept="image/*" 
+                             className="hidden" 
+                             onChange={(e) => {
+                                 if (e.target.files && e.target.files[0]) {
+                                     onOverrideWithManualEdit(loupeImage.id, e.target.files[0]);
+                                     setLoupeImage(null);
+                                 }
+                             }}
+                         />
+                     </label>
+                 )}
                  {onKeepItem && (
                      <button 
                         onClick={() => { onKeepItem(loupeImage.id); setLoupeImage(null); }}

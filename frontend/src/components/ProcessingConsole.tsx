@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useJobStore } from '../store/useJobStore';
+import { Info } from 'lucide-react';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
@@ -15,7 +16,23 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
   const { jobs } = useJobStore();
   
   const [realProgress, setRealProgress] = useState<number>(0);
-  const [statusMessage, setStatusMessage] = useState<string | null>(t('processing') || "Processing...");
+  const [statusMessage, setStatusMessage] = useState<string>("Aligning Exposures & Fusing HDR...");
+
+  // Simulate progressive pipeline disclosure text
+  useEffect(() => {
+     if (realProgress >= 100) return;
+     const messages = [
+        "Aligning Exposures & Fusing HDR...",
+        "Applying Tone Mapping & Geometry Correction...",
+        "Finalizing Web-Ready MLS Exports..."
+     ];
+     let idx = 0;
+     const interval = setInterval(() => {
+        idx = (idx + 1) % messages.length;
+        setStatusMessage(messages[idx]);
+     }, 8000);
+     return () => clearInterval(interval);
+  }, [realProgress]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -39,31 +56,35 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
     } else {
       const percent = Math.floor((completedCount / totalJobs) * 100);
       setRealProgress(percent === 0 ? 5 : percent);
-      setStatusMessage(`Processing (${completedCount}/${totalJobs})`);
     }
   }, [jobs, sessionId, expectedRooms, onComplete, t]);
 
   return (
-    <div className="w-full max-w-2xl text-center px-6 animate-in fade-in duration-500">
-      <h2 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight mb-16">{t('crafting_imagery') || "Processing Batch"}</h2>
+    <div className="w-full max-w-2xl text-center px-6 animate-in fade-in duration-500 flex flex-col items-center">
+      <h2 className="text-3xl md:text-4xl font-medium text-white tracking-tight mb-8">Processing Your Shoot</h2>
       
       <div 
-        className="h-[60px] flex items-center justify-center overflow-hidden relative mb-12"
+        className="h-[60px] flex items-center justify-center overflow-hidden relative mb-8"
         aria-live="polite"
       >
          <div className="absolute transition-all duration-300 ease-out w-full text-center opacity-100 translate-y-0">
-           <span className="text-xs md:text-sm tracking-[0.1em] uppercase text-muted font-sans">
+           <span className="text-sm tracking-[0.1em] uppercase text-white/60 font-medium">
              {statusMessage}
            </span>
          </div>
       </div>
 
-      <div className="w-full h-px bg-border/40 relative overflow-hidden">
+      <div className="w-full max-w-md bg-[#1C1C1E] border border-white/5 h-3 rounded-full overflow-hidden mb-6 shadow-inner relative">
         <div 
-          className="absolute top-0 left-0 h-full bg-foreground transition-all duration-500 ease-out"
+          className="absolute top-0 left-0 h-full bg-white transition-all duration-500 ease-out"
           style={{ width: `${realProgress}%` }}
         />
       </div>
+
+      <p className="mt-8 text-xs text-white/30 text-center flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full font-medium">
+         <Info className="w-4 h-4" />
+         You can safely close this window. We'll process your HDRs in the background and notify you when ready.
+      </p>
     </div>
   );
 }

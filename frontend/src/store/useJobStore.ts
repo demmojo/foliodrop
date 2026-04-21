@@ -24,16 +24,28 @@ interface Quota {
   limit: number;
 }
 
+interface StyleProfile {
+  id: string;
+  name: string;
+  url?: string;
+  createdAt: number;
+}
+
 interface JobStore {
   jobs: Record<string, Job>;
   activeSessionId: string | null;
   quota: Quota | null;
+  styleProfiles: StyleProfile[];
   addJobs: (ids: string[], sessionId: string) => void;
   rehydrateSession: (sessionId: string) => Promise<void>;
   pollDueJobs: () => Promise<void>;
   fetchQuota: () => Promise<void>;
   setJobs: (jobs: Record<string, Job>) => void;
   setSessionId: (id: string | null) => void;
+  setStyleProfiles: (profiles: StyleProfile[]) => void;
+  uploadStyleProfile: (file: File) => Promise<void>;
+  uploadTrainingPair: (brackets: File[], finalEdit: File) => Promise<void>;
+  overrideWithManualEdit: (jobId: string, file: File) => Promise<void>;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -42,9 +54,75 @@ export const useJobStore = create<JobStore>((set, get) => ({
   jobs: {},
   activeSessionId: null,
   quota: null,
+  styleProfiles: [],
   
   setJobs: (jobs) => set({ jobs }),
   setSessionId: (id) => set({ activeSessionId: id }),
+  setStyleProfiles: (profiles) => set({ styleProfiles: profiles }),
+
+  uploadStyleProfile: async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/api/v1/style/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        // Mock updating local state if backend isn't ready
+        const newProfile = { id: Date.now().toString(), name: file.name, createdAt: Date.now(), url: URL.createObjectURL(file) };
+        set((state) => ({ styleProfiles: [...state.styleProfiles, newProfile] }));
+      }
+    } catch (e) {
+      console.error("Failed to upload style profile", e);
+    }
+  },
+
+  uploadTrainingPair: async (brackets: File[], finalEdit: File) => {
+    try {
+      const formData = new FormData();
+      brackets.forEach(b => formData.append('brackets', b));
+      formData.append('final_edit', finalEdit);
+      const res = await fetch(`${API_URL}/api/v1/training/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        console.error("Failed to upload training pair");
+      }
+    } catch (e) {
+      console.error("Failed to upload training pair", e);
+    }
+  },
+
+  overrideWithManualEdit: async (jobId: string, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/api/v1/jobs/${jobId}/override`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      // Update local state optimistic/mock if backend isn't ready
+      const mockUrl = URL.createObjectURL(file);
+      set((state) => {
+        const updatedJobs = { ...state.jobs };
+        if (updatedJobs[jobId] && updatedJobs[jobId].result) {
+          updatedJobs[jobId].result = {
+            ...updatedJobs[jobId].result!,
+            url: mockUrl,
+            thumbUrl: mockUrl,
+            status: 'APPROVED',
+          };
+          updatedJobs[jobId].status = 'COMPLETED';
+        }
+        return { jobs: updatedJobs };
+      });
+    } catch (e) {
+      console.error("Failed to override with manual edit", e);
+    }
+  },
 
   fetchQuota: async () => {
     try {
