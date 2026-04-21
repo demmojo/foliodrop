@@ -6,11 +6,10 @@ interface BeforeAfterSliderProps {
   beforeUrl: string;
   afterUrl: string;
   className?: string;
-  isMocked?: boolean;
   objectFit?: 'cover' | 'contain';
 }
 
-export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, isMocked, objectFit = 'cover' }: BeforeAfterSliderProps) {
+export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, objectFit = 'cover' }: BeforeAfterSliderProps) {
   const { t } = useTranslation();
   const [sliderPosition, setSliderPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
@@ -86,8 +85,7 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, isMo
           alt="Fused HDR Result"
           className={clsx(
             "absolute inset-0 w-full h-full pointer-events-none",
-            objectFit === 'cover' ? 'object-cover' : 'object-contain',
-            isMocked && "contrast-105 saturate-110 brightness-105"
+            objectFit === 'cover' ? 'object-cover' : 'object-contain'
           )}
           crossOrigin="anonymous"
           loading="lazy"

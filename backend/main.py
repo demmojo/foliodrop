@@ -3,19 +3,18 @@ import uuid
 import json
 import logging
 import asyncio
-from typing import List, AsyncGenerator
+from typing import List, Optional
 from fastapi import FastAPI, Depends, Body, Request, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-from backend.core.ports import IDatabase, IBlobStorage, ITaskQueue, IEventPublisher, IProgressSubscriber
+from backend.core.ports import IDatabase, IBlobStorage, ITaskQueue, IEventPublisher
 from backend.core.use_cases import (
     GenerateUploadUrlsUseCase, 
     FinalizeJobUseCase, 
-    ProcessHdrGroupUseCase, 
-    StreamHDRProgressUseCase
+    ProcessHdrGroupUseCase
 )
 
 logger = logging.getLogger(__name__)
@@ -31,209 +30,73 @@ app.add_middleware(
 )
 
 # -----------------------------------------------------------------------------
-# Global Instances (for lifecycle management)
-# -----------------------------------------------------------------------------
-event_bus = None
-
-@app.on_event("startup")
-async def startup_event():
-    global event_bus
-    redis_url = os.getenv("REDIS_URL", "")
-    
-    if redis_url and redis_url != "memory://":
-        from backend.infrastructure.adapters import RedisPubSubAdapter
-        try:
-            adapter = RedisPubSubAdapter(redis_url)
-            await adapter.connect()
-            event_bus = adapter
-            logger.info("Using Redis for Pub/Sub")
-            return
-        except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}. Falling back to InMemoryPubSub.")
-    
-    from backend.tests.fakes import InMemoryPubSub
-    event_bus = InMemoryPubSub()
-    logger.info("Using InMemoryPubSub")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    global event_bus
-    if hasattr(event_bus, "close") and callable(event_bus.close):
-        await event_bus.close()
-
-# -----------------------------------------------------------------------------
 # Dependency Injection
 # -----------------------------------------------------------------------------
 def get_database() -> IDatabase:
-    if os.getenv("TESTING") == "true":
-        from backend.tests.fakes import InMemoryDatabase
-        return InMemoryDatabase()
-    from backend.infrastructure.adapters import FirestoreAdapter
-    return FirestoreAdapter()
+    from backend.tests.fakes import FakeDatabase
+    return FakeDatabase()
 
 def get_blob_storage() -> IBlobStorage:
-    if os.getenv("TESTING") == "true":
-        from backend.tests.fakes import InMemoryBlobStorage
-        return InMemoryBlobStorage()
-    from backend.infrastructure.adapters import GCSBlobStorageAdapter
-    bucket_name = os.getenv("GCP_UPLOAD_BUCKET", "real-estate-hdr-bucket")
-    return GCSBlobStorageAdapter(bucket_name=bucket_name)
+    from backend.tests.fakes import FakeBlobStorage
+    return FakeBlobStorage()
 
 def get_task_queue() -> ITaskQueue:
-    if os.getenv("TESTING") == "true":
-        from backend.tests.fakes import InMemoryTaskQueue
-        return InMemoryTaskQueue()
-    from backend.infrastructure.adapters import CloudTasksAdapter
-    project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "developer-resources")
-    region = os.getenv("REGION", "us-central1")
-    queue_name = os.getenv("CLOUD_TASKS_QUEUE", "hdr-queue")
-    return CloudTasksAdapter(project_id, region, queue_name)
+    from backend.tests.fakes import FakeTaskQueue
+    return FakeTaskQueue()
 
 def get_event_publisher() -> IEventPublisher:
-    global event_bus
-    return event_bus
-
-def get_progress_subscriber() -> IProgressSubscriber:
-    global event_bus
-    return event_bus
+    from backend.tests.fakes import FakeEventPublisher
+    return FakeEventPublisher()
 
 # -----------------------------------------------------------------------------
-# Use Case Factories
+# Request Models
 # -----------------------------------------------------------------------------
-def get_generate_upload_urls_use_case(storage: IBlobStorage = Depends(get_blob_storage)) -> GenerateUploadUrlsUseCase:
-    return GenerateUploadUrlsUseCase(storage=storage)
-
-def get_finalize_job_use_case(task_queue: ITaskQueue = Depends(get_task_queue)) -> FinalizeJobUseCase:
-    return FinalizeJobUseCase(task_queue=task_queue)
-
-def get_process_hdr_use_case(
-    event_publisher: IEventPublisher = Depends(get_event_publisher),
-    task_queue: ITaskQueue = Depends(get_task_queue)
-) -> ProcessHdrGroupUseCase:
-    return ProcessHdrGroupUseCase(event_publisher=event_publisher, task_queue=task_queue)
-
-def get_stream_use_case(
-    subscriber: IProgressSubscriber = Depends(get_progress_subscriber)
-) -> StreamHDRProgressUseCase:
-    return StreamHDRProgressUseCase(subscriber=subscriber)
-
-# -----------------------------------------------------------------------------
-# API Models
-# -----------------------------------------------------------------------------
-class GenerateUrlsRequest(BaseModel):
+class UploadUrlRequest(BaseModel):
+    session_id: str
     files: List[str]
 
 class FinalizeJobRequest(BaseModel):
-    rooms: List[str]
+    session_id: str
+    files: List[dict]
+
+class CloudTaskPayload(BaseModel):
+    session_id: str
+    room_name: str
+    photos: List[str]
 
 # -----------------------------------------------------------------------------
-# Routes
+# Endpoints
 # -----------------------------------------------------------------------------
-@app.get("/")
-def health_check():
-    return {"status": "ok"}
-
-@app.post("/api/session")
-def create_session(db: IDatabase = Depends(get_database)):
-    session_id = str(uuid.uuid4())
-    db.create_session(session_id)
-    return {"session_id": session_id}
-
-@app.get("/api/session/{session_id}")
-def get_session(session_id: str, db: IDatabase = Depends(get_database)):
-    session_data = db.get_session(session_id)
-    if not session_data:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Extend session TTL on fetch (rolling TTL)
-    new_expiry = (datetime.now(timezone.utc) + timedelta(hours=48)).isoformat()
-    db.update_session(session_id, {"expires_at": new_expiry})
-    session_data["expires_at"] = new_expiry
-
-    return session_data
-
-@app.post("/api/session/{session_id}/extend")
-def extend_session(session_id: str, db: IDatabase = Depends(get_database)):
-    session_data = db.get_session(session_id)
-    if not session_data:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Calculate new expiry: 48 hours from current UTC time
-    new_expiry = (datetime.now(timezone.utc) + timedelta(hours=48)).isoformat()
-    
-    # Update the session in the database
-    db.update_session(session_id, {"expires_at": new_expiry})
-    
-    return {"status": "extended", "expires_at": new_expiry}
-
-@app.post("/api/upload-urls")
-def generate_upload_urls(
-    request: GenerateUrlsRequest, 
-    session_id: str = "demo-session",
-    use_case: GenerateUploadUrlsUseCase = Depends(get_generate_upload_urls_use_case)
-):
-    urls = use_case.execute(session_id, request.files)
+@app.post("/api/v1/upload-urls")
+def generate_upload_urls(req: UploadUrlRequest, storage: IBlobStorage = Depends(get_blob_storage)):
+    use_case = GenerateUploadUrlsUseCase(storage)
+    urls = use_case.execute(req.session_id, req.files)
     return {"urls": urls}
 
-@app.post("/api/jobs/{session_id}/finalize")
-def finalize_job(
-    session_id: str, 
-    request: FinalizeJobRequest,
-    use_case: FinalizeJobUseCase = Depends(get_finalize_job_use_case)
-):
-    result = use_case.execute(session_id, request.rooms)
+@app.post("/api/v1/finalize-job")
+def finalize_job(req: FinalizeJobRequest, task_queue: ITaskQueue = Depends(get_task_queue)):
+    use_case = FinalizeJobUseCase(task_queue)
+    result = use_case.execute(req.session_id, req.files)
     return result
 
-@app.post("/api/process-room")
-async def process_room(
-    payload: dict = Body(...),
-    use_case: ProcessHdrGroupUseCase = Depends(get_process_hdr_use_case)
+@app.post("/tasks/process-room")
+async def process_room_task(
+    payload: CloudTaskPayload, 
+    event_publisher: IEventPublisher = Depends(get_event_publisher),
+    task_queue: ITaskQueue = Depends(get_task_queue),
+    storage: IBlobStorage = Depends(get_blob_storage),
+    db: IDatabase = Depends(get_database)
 ):
-    session_id = payload.get("session_id")
-    room = payload.get("room")
-    photos = payload.get("photos", None)
-    result = await use_case.execute(session_id, room, photos)
+    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage)
+    result = await use_case.execute(payload.session_id, payload.room_name, payload.photos)
+    
+    # Store outcome in the DB so the frontend polling endpoint can read it
+    db.save_processing_result(payload.session_id, result)
     return result
 
-@app.post("/api/perspective-correction")
-def perspective_correction(payload: dict = Body(...)):
-    # Run hugin-tools as a subprocess
-    pass
+@app.get("/api/v1/hdr-jobs/{session_id}/status")
+def get_job_status(session_id: str, db: IDatabase = Depends(get_database)):
+    results = db.get_processing_results(session_id)
+    # The frontend uses this to count how many rooms are READY/FLAGGED
+    return {"status": "POLLING", "results": results}
 
-@app.get("/api/v1/hdr-jobs/{job_id}/progress")
-async def stream_hdr_progress(
-    job_id: str, 
-    request: Request, 
-    use_case: StreamHDRProgressUseCase = Depends(get_stream_use_case)
-):
-    async def sse_generator():
-        try:
-            async for message in use_case.execute(job_id):
-                if await request.is_disconnected():
-                    logger.info(f"Client disconnected during HDR job {job_id}. Dropping connection.")
-                    break
-                
-                if message is None:
-                    yield ": heartbeat\n\n"
-                    continue
-                
-                sse_payload = json.dumps(message)
-                yield f"data: {sse_payload}\n\n"
-
-                if message.get("status") in ("COMPLETED", "FAILED", "CANCELLED"):
-                    yield f"event: close\ndata: {message.get('status')}\n\n"
-                    break
-                    
-        except asyncio.CancelledError:
-            logger.info(f"SSE request cancelled for HDR job {job_id}")
-            raise
-
-    return StreamingResponse(
-        sse_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no" 
-        }
-    )

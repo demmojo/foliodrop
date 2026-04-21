@@ -6,7 +6,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     beta: 'Beta',
     node_us_central1: 'Node: us-central1',
     loading_workspace: 'Loading workspace...',
-    import_exposures: 'Prepare Listing Photos',
+    import_exposures: 'Add Listing Photos',
     drop_brackets: 'Drag and drop your property photos here. Get perfectly balanced, MLS-ready images in seconds.',
     supports_formats: 'Supports RAW, JPEG, TIFF',
     browse_files: 'Browse Files',

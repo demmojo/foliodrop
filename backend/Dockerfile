@@ -1,10 +1,9 @@
 FROM python:3.12-slim
 
-# Install system dependencies for OpenCV and Hugin
+# Install system dependencies required for OpenCV
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
-    hugin-tools \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

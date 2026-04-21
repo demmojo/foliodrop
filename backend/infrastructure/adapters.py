@@ -55,6 +55,29 @@ class GCSBlobStorageAdapter(IBlobStorage):
             urls.append({"file": file, "url": url, "path": blob_name})
         return urls
 
+    def download_blobs(self, session_id: str, filenames: List[str]) -> List[bytes]:
+        bucket = self.client.bucket(self.bucket_name)
+        data = []
+        for filename in filenames:
+            blob_name = f"{session_id}/{filename}"
+            blob = bucket.blob(blob_name)
+            data.append(blob.download_as_bytes())
+        return data
+
+    def upload_blob(self, session_id: str, filename: str, data: bytes, content_type: str) -> str:
+        bucket = self.client.bucket(self.bucket_name)
+        blob_name = f"{session_id}/{filename}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(data, content_type=content_type)
+        # Assuming bucket is public or we generate a long-lived signed URL. 
+        # For this prototype, let's generate a signed URL valid for 48 hours to match the session TTL.
+        url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(hours=48),
+            method="GET"
+        )
+        return url
+
 class CloudTasksAdapter(ITaskQueue):
     def __init__(self, project_id: str, region: str, queue_name: str):
         self.client = tasks_v2.CloudTasksClient()
@@ -63,13 +86,16 @@ class CloudTasksAdapter(ITaskQueue):
         self.queue_name = queue_name
         self.queue_path = self.client.queue_path(project_id, region, queue_name)
 
-    def enqueue_room_processing(self, session_id: str, room: str) -> None:
+    def enqueue_room_processing(self, session_id: str, room: str, photos: List[str]) -> None:
+        import json
+        body_dict = {"session_id": session_id, "room": room, "photos": photos}
+        
         task = {
             "http_request": {
                 "http_method": tasks_v2.HttpMethod.POST,
                 "url": f"https://{self.region}-{self.project_id}.run.app/api/process-room",
                 "headers": {"Content-Type": "application/json"},
-                "body": f'{{"session_id": "{session_id}", "room": "{room}"}}'.encode(),
+                "body": json.dumps(body_dict).encode(),
             }
         }
         # self.client.create_task(request={"parent": self.queue_path, "task": task})
@@ -91,11 +117,14 @@ class RedisPubSubAdapter(IEventPublisher, IProgressSubscriber):
             await self._pool.close()
             logger.info("Redis connection closed")
 
-    async def publish_progress(self, session_id: str, room: str, status: str) -> None:
+    async def publish_progress(self, session_id: str, room: str, status: str, result: Optional[Dict[str, Any]] = None) -> None:
         if not self._pool:
             return
         channel = f"session:{session_id}"
-        message = json.dumps({"room": room, "status": status})
+        message_dict = {"room": room, "status": status}
+        if result is not None:
+            message_dict["result"] = result
+        message = json.dumps(message_dict)
         await self._pool.publish(channel, message)
 
     async def subscribe(self, channel: str) -> AsyncGenerator[Optional[Dict[str, Any]], None]:

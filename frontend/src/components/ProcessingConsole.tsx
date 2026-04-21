@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import clsx from 'clsx';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -13,133 +13,86 @@ interface ProcessingConsoleProps {
 export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComplete }: ProcessingConsoleProps) {
   const { t } = useTranslation();
   
-  const statusLabels = useMemo<Record<string, string>>(() => ({
-    'ALIGNING': t('status_aligning'),
-    'SEMANTIC_MASKING': t('status_masking'),
-    'FUSING': t('status_fusing'),
-    'DENOISING': t('status_denoising'),
-    'AI_REVIEW_AND_EDIT': t('status_ai_review'),
-    'COMPLETED': t('status_completed'),
-    'FINISHED': t('status_completed'),
-    'FAILED': t('status_failed')
-  }), [t]);
-
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [realProgress, setRealProgress] = useState<number | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [realProgress, setRealProgress] = useState<number>(0);
+  const [statusMessage, setStatusMessage] = useState<string | null>(t('processing') || "Processing...");
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
   useEffect(() => {
-    if (!sessionId) {
-      // Mock progression if offline
-      if (activeIndex >= Object.values(statusLabels).length - 3) {
-        setTimeout(() => onComplete(), 800);
-        return;
-      }
+    if (!sessionId) return;
 
-      const timer = setTimeout(() => {
-        setActiveIndex(prev => prev + 1);
-      }, 400);
-
-      return () => clearTimeout(timer);
-    } else {
-      // Real SSE progression
-      const eventSource = new EventSource(`${API_URL}/api/v1/hdr-jobs/${sessionId}/progress`);
-      let completedRooms = 0;
-      const allResults: any[] = [];
-
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.status === 'COMPLETED' || data.status === 'FINISHED') {
-           completedRooms++;
-           if (data.result) allResults.push(data.result);
-           
-           if (completedRooms >= expectedRooms || data.status === 'JOB_FINISHED') {
-             eventSource.close();
-             setRealProgress(100);
-             setStatusMessage(t('status_completed'));
-             setTimeout(() => onComplete(allResults), 800);
-           } else {
-             setRealProgress(Math.floor((completedRooms / expectedRooms) * 100));
-             setStatusMessage(`${t('status_completed')} (${completedRooms}/${expectedRooms})`);
-           }
-        } else {
-           // E.g. {"status": "ALIGNING", "room": "kitchen", "progress": 20}
-           if (data.progress !== undefined) {
-             setRealProgress(data.progress);
-           } else {
-             // Fake progress bump based on status
-             setRealProgress(prev => Math.min((prev || 0) + 15, 95));
-           }
-           setStatusMessage(statusLabels[data.status] || data.status || t('processing'));
+    let completedRooms = 0;
+    const allResults: any[] = [];
+    
+    // Stateless 2-second HTTP polling
+    const pollStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/hdr-jobs/${sessionId}/status`);
+        if (!res.ok) return; // Silent fail on network blips, retry next cycle
+        
+        const data = await res.json();
+        
+        // Ensure we count both READY and FLAGGED as completed processing items
+        const finishedItems = (data.results || []).filter((r: any) => 
+           r.status === 'READY' || r.status === 'FLAGGED' || r.status === 'COMPLETED'
+        );
+        completedRooms = finishedItems.length;
+        
+        if (completedRooms > 0 && finishedItems.length > allResults.length) {
+           // We have new results
+           finishedItems.forEach((item: any) => {
+               if (!allResults.find(r => r.room === item.room)) {
+                   allResults.push(item);
+               }
+           });
         }
-      };
 
-      eventSource.onerror = (err) => {
-        console.error("SSE Error:", err);
-        // Fallback gracefully to completion if it drops after a while
-        eventSource.close();
-        setTimeout(() => onComplete(), 1500);
-      };
+        if (completedRooms >= expectedRooms || data.status === 'JOB_FINISHED') {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setRealProgress(100);
+          setStatusMessage(t('status_completed') || "Batch Complete");
+          setTimeout(() => onComplete(allResults), 800);
+        } else {
+          const percent = Math.floor((completedRooms / expectedRooms) * 100);
+          // Fake a minimum 5% progress so the UI feels alive before the first room finishes
+          setRealProgress(percent === 0 ? 5 : percent);
+          setStatusMessage(`Processing (${completedRooms}/${expectedRooms})`);
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+    };
 
-      return () => {
-        eventSource.close();
-      };
-    }
-  }, [activeIndex, onComplete, sessionId, API_URL, statusLabels]);
+    // Poll immediately, then every 2 seconds
+    pollStatus();
+    pollIntervalRef.current = setInterval(pollStatus, 2000);
 
-    const progress = sessionId && realProgress !== null 
-    ? realProgress 
-    : Math.min(((activeIndex) / (Object.values(statusLabels).length - 3)) * 100, 100);
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [onComplete, sessionId, API_URL, expectedRooms, t]);
 
   return (
     <div className="w-full max-w-2xl text-center px-6 animate-in fade-in duration-500">
-      <h2 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight mb-16">{t('crafting_imagery')}</h2>
+      <h2 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight mb-16">{t('crafting_imagery') || "Processing Batch"}</h2>
       
       <div 
         className="h-[60px] flex items-center justify-center overflow-hidden relative mb-12"
         aria-live="polite"
-        aria-atomic="false"
       >
-          {sessionId && statusMessage ? (
-             <div className="absolute transition-all duration-300 ease-out w-full text-center opacity-100 translate-y-0">
-               <span className="text-xs md:text-sm tracking-[0.1em] uppercase text-muted font-sans">
-                 {statusMessage}
-               </span>
-             </div>
-          ) : (
-            Object.values(statusLabels).slice(0, -3).map((label, idx) => {
-              const isCurrent = idx === activeIndex;
-              const isPast = idx < activeIndex;
-              return (
-                <div
-                  key={label}
-                  aria-hidden={!isCurrent}
-                  className={clsx(
-                    "absolute transition-all duration-300 ease-out w-full text-center",
-                    isCurrent ? "opacity-100 translate-y-0" : 
-                    isPast ? "opacity-0 -translate-y-4" : "opacity-0 translate-y-4 pointer-events-none"
-                  )}
-                >
-                  <span className="text-xs md:text-sm tracking-[0.1em] uppercase text-muted font-sans">
-                    {label}
-                  </span>
-                </div>
-              );
-            })
-          )}
+         <div className="absolute transition-all duration-300 ease-out w-full text-center opacity-100 translate-y-0">
+           <span className="text-xs md:text-sm tracking-[0.1em] uppercase text-muted font-sans">
+             {statusMessage}
+           </span>
+         </div>
       </div>
 
-      {/* Minimal Progress Line */}
-      <div className="w-full max-w-md mx-auto h-px bg-border relative overflow-hidden">
+      <div className="w-full h-px bg-border/40 relative overflow-hidden">
         <div 
-          className="absolute top-0 left-0 bottom-0 bg-accent transition-all duration-300 ease-out"
-          style={{ width: `${progress}%` }}
+          className="absolute top-0 left-0 h-full bg-foreground transition-all duration-500 ease-out"
+          style={{ width: `${realProgress}%` }}
         />
-      </div>
-      <div className="mt-6 font-mono text-xs text-muted">
-        {Math.round(progress)}%
       </div>
     </div>
   );
