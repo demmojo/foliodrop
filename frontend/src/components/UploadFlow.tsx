@@ -180,8 +180,13 @@ export default function UploadFlow() {
   };
 
   const handleFinalExport = () => {
-      // In production, this triggers a ZIP download of all cargoGrid photos
-      showToast("Exporting batch...");
+      const hasUnreviewed = processedPhotos.some(p => p.isFlagged || p.status === 'FLAGGED');
+      if (hasUnreviewed) {
+          const proceed = window.confirm("You have unreviewed images in the queue. Exporting will discard them. Proceed?");
+          if (!proceed) return;
+      }
+      const exportCount = processedPhotos.filter(p => !p.isFlagged && p.status !== 'FLAGGED').length;
+      showToast(`Exporting batch of ${exportCount} images...`);
   };
 
   return (

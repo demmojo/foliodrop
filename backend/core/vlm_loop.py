@@ -5,9 +5,10 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Do NOT use default values here for google-genai schema validation
 class VLMQualityReport(BaseModel):
     window_reasoning: str = Field(description="Chain of thought: Explain step-by-step if the windows are completely blown out (solid white with no mullions/details) compared to the reference dark bracket.")
-    window_score: int = Field(ge=1, le=10, description="Score 1-10. 10 = perfect preservation of window details from the dark bracket. 1 = completely blown out/clipping.")
+    window_score: int = Field(description="Score 1-10. 10 = perfect preservation of window details from the dark bracket. 1 = completely blown out/clipping.")
 
 class VLMLoopError(Exception):
     def __init__(self, message: str, raw_telemetry: list):
@@ -38,7 +39,7 @@ async def evaluate_fused_image(
         from google.genai import types
         
         response = await genai_client.aio.models.generate_content(
-            model='gemini-2.5-pro',
+            model='gemini-3.1-pro-preview',
             contents=[
                 types.Part.from_text(system_prompt),
                 types.Part.from_bytes(data=darkest_bracket_bytes, mime_type='image/jpeg'),

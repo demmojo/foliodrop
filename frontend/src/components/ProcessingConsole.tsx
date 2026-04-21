@@ -33,9 +33,9 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
         
         const data = await res.json();
         
-        // Ensure we count both READY and FLAGGED as completed processing items
+        // Ensure we count READY, FLAGGED, and FAILED as completed processing items
         const finishedItems = (data.results || []).filter((r: any) => 
-           r.status === 'READY' || r.status === 'FLAGGED' || r.status === 'COMPLETED'
+           r.status === 'READY' || r.status === 'FLAGGED' || r.status === 'COMPLETED' || r.status === 'FAILED' || r.status === 'error'
         );
         completedRooms = finishedItems.length;
         

@@ -33,6 +33,18 @@ class FinalizeJobUseCase:
             
         return {"status": "enqueued", "tasks_count": len(groups)}
 
+def downsample_for_vlm(image_bytes: bytes, max_dim: int = 1080) -> bytes:
+    import cv2
+    img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return image_bytes
+    h, w = img.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+    _, encoded = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    return encoded.tobytes()
+
 class ProcessHdrGroupUseCase:
     def __init__(self, event_publisher: IEventPublisher, task_queue: ITaskQueue, storage: IBlobStorage):
         self.event_publisher = event_publisher
@@ -47,10 +59,11 @@ class ProcessHdrGroupUseCase:
             # 0. FETCH images from GCP Blob Storage
             raw_bytes_list = await asyncio.to_thread(self.storage.download_blobs, session_id, photos)
             
-            # The darkest bracket is usually the first or last depending on camera settings. 
+            # The darkest bracket is usually the first or last depending on camera settings.
             # We'll calculate brightness to be safe, or assume standard sorting.
             # For simplicity in this mock, we assume the list is sorted dark -> bright or we just grab index 0.
-            darkest_bracket_bytes = raw_bytes_list[0] 
+            darkest_bracket_bytes = raw_bytes_list[0]
+            middle_bracket_bytes = raw_bytes_list[len(raw_bytes_list) // 2]
             
             # 1. Deterministic OpenCV Pipeline
             import cv2
@@ -70,9 +83,12 @@ class ProcessHdrGroupUseCase:
             _, encoded_img = cv2.imencode('.jpg', final_bgr_8bit)
             fused_image_bytes = encoded_img.tobytes()
             
-            # 2. Upload the finished asset IMMEDIATELY (Do not block on VLM)
+            # 2. Upload the finished asset AND the original BEFORE asset
             final_filename = f"hdr_{room.replace(' ', '_')}_{uuid.uuid4().hex[:8]}.jpg"
+            before_filename = f"raw_{room.replace(' ', '_')}_{uuid.uuid4().hex[:8]}.jpg"
+            
             final_url = await asyncio.to_thread(self.storage.upload_blob, session_id, final_filename, fused_image_bytes, "image/jpeg")
+            original_url = await asyncio.to_thread(self.storage.upload_blob, session_id, before_filename, middle_bracket_bytes, "image/jpeg")
 
             # 3. VLM QA Judge (Non-Blocking Soft Flag)
             from backend.core.vlm_loop import evaluate_fused_image
@@ -90,8 +106,12 @@ class ProcessHdrGroupUseCase:
                 report_data = {"window_reasoning": "Mock: Windows look OK.", "window_score": 8}
             else:
                 try:
+                    # Downsample images for VLM to avoid token/latency limits
+                    vlm_darkest_bytes = await asyncio.to_thread(downsample_for_vlm, darkest_bracket_bytes)
+                    vlm_fused_bytes = await asyncio.to_thread(downsample_for_vlm, fused_image_bytes)
+                    
                     client = genai.Client(api_key=api_key)
-                    report, telemetry = await evaluate_fused_image(client, darkest_bracket_bytes, fused_image_bytes)
+                    report, telemetry = await evaluate_fused_image(client, vlm_darkest_bytes, vlm_fused_bytes)
                     is_flagged = report.window_score < 7
                     report_data = report.model_dump()
                 except Exception as e:
@@ -106,6 +126,7 @@ class ProcessHdrGroupUseCase:
             result_payload = {
                 "room": room,
                 "url": final_url,
+                "originalUrl": original_url,
                 "status": status,
                 "isFlagged": is_flagged,
                 "vlmReport": report_data,
