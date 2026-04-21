@@ -9,7 +9,7 @@ def test_generate_upload_urls():
     use_case = GenerateUploadUrlsUseCase(storage)
     urls = use_case.execute("test-session", ["img1.jpg", "img2.jpg"])
     assert len(urls) == 2
-    assert urls[0]["name"] == "img1.jpg"
+    assert urls[0]["file"] == "img1.jpg"
 
 def test_finalize_job():
     task_queue = FakeTaskQueue()

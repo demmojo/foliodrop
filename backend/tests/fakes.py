@@ -57,6 +57,28 @@ class FakeDatabase(IDatabase):
         quota["used"] += amount
         return True
 
+    def save_style_image(self, agency_id: str, blob_path: str) -> List[str]:
+        if not hasattr(self, 'style_images'):
+            self.style_images = {}
+        images = self.style_images.setdefault(agency_id, [])
+        images.append(blob_path)
+        deleted = []
+        if len(images) > 3:
+            deleted.extend(images[:-3])
+            self.style_images[agency_id] = images[-3:]
+        return deleted
+
+    def get_style_images(self, agency_id: str) -> List[str]:
+        if not hasattr(self, 'style_images'):
+            return []
+        return self.style_images.get(agency_id, [])
+
+    def save_training_pair(self, agency_id: str, bracket_paths: List[str], final_path: str) -> None:
+        if not hasattr(self, 'training_pairs'):
+            self.training_pairs = {}
+        pairs = self.training_pairs.setdefault(agency_id, [])
+        pairs.append({"brackets": bracket_paths, "final": final_path})
+
 class FakeBlobStorage(IBlobStorage):
     def generate_upload_urls(self, session_id: str, files: List[str]) -> List[dict]:
         return [{"file": f, "url": f"https://fake-upload/{f}", "path": f"{session_id}/{f}"} for f in files]
@@ -69,8 +91,14 @@ class FakeBlobStorage(IBlobStorage):
     def upload_blob(self, session_id: str, filename: str, data: bytes, content_type: str) -> str:
         return f"http://fake-storage/{session_id}/{filename}"
 
+    def upload_blob_direct(self, blob_path: str, data: bytes, content_type: str) -> str:
+        return f"http://fake-storage/{blob_path}"
+
     def generate_signed_url(self, blob_path: str, expiration_minutes: int = 15) -> str:
         return f"http://fake-storage/{blob_path}?signed=true"
+
+    def delete_blob(self, blob_path: str) -> None:
+        pass
 
 class FakeTaskQueue(ITaskQueue):
     def enqueue_room_processing(self, session_id: str, room_name: str, photos: List[str]):

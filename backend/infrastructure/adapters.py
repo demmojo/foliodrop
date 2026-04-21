@@ -103,6 +103,34 @@ class FirestoreAdapter(IDatabase):
             doc_ref.set({"used": amount, "limit": 3000})
         return True
 
+    def save_style_image(self, agency_id: str, blob_path: str) -> List[str]:
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+        doc_ref = self.db.collection("agencies").document(agency_id).collection("style_images").document()
+        doc_ref.set({"blob_path": blob_path, "created_at": now})
+
+        docs = self.db.collection("agencies").document(agency_id).collection("style_images").order_by("created_at").stream()
+        docs = list(docs)
+        deleted_paths = []
+        if len(docs) > 3:
+            for doc in docs[:-3]:
+                deleted_paths.append(doc.to_dict().get("blob_path"))
+                doc.reference.delete()
+        return deleted_paths
+
+    def get_style_images(self, agency_id: str) -> List[str]:
+        docs = self.db.collection("agencies").document(agency_id).collection("style_images").order_by("created_at").stream()
+        return [doc.to_dict().get("blob_path") for doc in docs if doc.to_dict().get("blob_path")]
+
+    def save_training_pair(self, agency_id: str, bracket_paths: List[str], final_path: str) -> None:
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+        self.db.collection("agencies").document(agency_id).collection("training_pairs").add({
+            "bracket_paths": bracket_paths,
+            "final_path": final_path,
+            "created_at": now
+        })
+
 class GCSBlobStorageAdapter(IBlobStorage):
     def __init__(self, bucket_name: str):
         self.client = storage.Client()
@@ -212,6 +240,20 @@ class GCSBlobStorageAdapter(IBlobStorage):
         blob = bucket.blob(blob_name)
         blob.upload_from_string(data, content_type=content_type)
         return blob_name
+
+    def upload_blob_direct(self, blob_path: str, data: bytes, content_type: str) -> str:
+        bucket = self.client.bucket(self.bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(data, content_type=content_type)
+        return blob_path
+
+    def delete_blob(self, blob_path: str) -> None:
+        try:
+            bucket = self.client.bucket(self.bucket_name)
+            blob = bucket.blob(blob_path)
+            blob.delete()
+        except Exception as e:
+            logger.error(f"Failed to delete blob {blob_path}: {e}")
 
     def generate_signed_url(self, blob_path: str, expiration_minutes: int = 15) -> str:
         bucket = self.client.bucket(self.bucket_name)

@@ -4,7 +4,7 @@ import json
 import logging
 import asyncio
 from typing import List, Optional, Dict
-from fastapi import FastAPI, Depends, Body, Request, HTTPException, status
+from fastapi import FastAPI, Depends, Body, Request, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,7 +14,10 @@ from backend.core.ports import IDatabase, IBlobStorage, ITaskQueue, IEventPublis
 from backend.core.use_cases import (
     GenerateUploadUrlsUseCase, 
     FinalizeJobUseCase, 
-    ProcessHdrGroupUseCase
+    ProcessHdrGroupUseCase,
+    UploadStyleImageUseCase,
+    UploadTrainingPairUseCase,
+    OverrideJobImageUseCase
 )
 
 logger = logging.getLogger(__name__)
@@ -206,3 +209,50 @@ def batch_signed_url(req: BatchSignedUrlRequest, storage: IBlobStorage = Depends
         })
     return {"urls": urls}
 
+
+
+@app.post("/api/v1/style/upload")
+async def upload_style_image(
+    file: UploadFile = File(...),
+    storage: IBlobStorage = Depends(get_blob_storage),
+    db: IDatabase = Depends(get_database)
+):
+    use_case = UploadStyleImageUseCase(storage, db)
+    file_data = await file.read()
+    result = use_case.execute("default", file.filename, file_data, file.content_type)
+    return result
+
+@app.post("/api/v1/training/upload")
+async def upload_training_pair(
+    brackets: List[UploadFile] = File(...),
+    final_edit: UploadFile = File(...),
+    storage: IBlobStorage = Depends(get_blob_storage),
+    db: IDatabase = Depends(get_database)
+):
+    use_case = UploadTrainingPairUseCase(storage, db)
+    
+    bracket_data = []
+    for b in brackets:
+        data = await b.read()
+        bracket_data.append((b.filename, data, b.content_type))
+        
+    final_data = await final_edit.read()
+    final_tuple = (final_edit.filename, final_data, final_edit.content_type)
+    
+    result = use_case.execute("default", bracket_data, final_tuple)
+    return result
+
+@app.post("/api/v1/jobs/{job_id}/override")
+async def override_job_image(
+    job_id: str,
+    file: UploadFile = File(...),
+    storage: IBlobStorage = Depends(get_blob_storage),
+    db: IDatabase = Depends(get_database)
+):
+    use_case = OverrideJobImageUseCase(storage, db)
+    file_data = await file.read()
+    final_tuple = (file.filename, file_data, file.content_type)
+    result = use_case.execute("default", job_id, final_tuple)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result

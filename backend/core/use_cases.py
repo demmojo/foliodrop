@@ -163,11 +163,15 @@ class ProcessHdrGroupUseCase:
             if api_key != "dummy-key":
                 client = genai.Client(api_key=api_key)
                 
+                # Fetch style images
+                style_paths = self.db.get_style_images("default")
+                style_urls = [self.storage.generate_signed_url(p) for p in style_paths]
+                
                 max_retries = 3
                 for attempt in range(max_retries + 1):
                     try:
                         gen_img_bytes, gen_info = await generate_hybrid_hdr(
-                            client, fused_base_bytes, bracket_bytes_list, retry_count=attempt
+                            client, fused_base_bytes, bracket_bytes_list, retry_count=attempt, style_urls=style_urls
                         )
                         
                         # Structural QA
@@ -197,9 +201,13 @@ class ProcessHdrGroupUseCase:
                                 final_image_bytes = fused_base_bytes
                                 is_flagged = True
                                 report_data = {"reason": "Structural QA failed 3 times. Falling back to OpenCV base."}
+                                import logging
+                                logger = logging.getLogger(__name__)
                                 logger.warning(f"Room {room} structural QA failed 3x. Fallback used.")
                                 
                     except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
                         logger.error(f"Generation error on attempt {attempt}: {e}")
                         telemetry.append({"attempt": attempt, "error": str(e)})
                         if attempt == max_retries:
@@ -262,3 +270,100 @@ class ProcessHdrGroupUseCase:
             if job:
                 self.db.save_job(job_id, session_id, "FAILED", job.get("idempotency_key", ""), error=str(e))
             return {"status": "error", "room": room, "message": str(e)}
+
+class UploadStyleImageUseCase:
+    def __init__(self, storage: IBlobStorage, db: IDatabase):
+        self.storage = storage
+        self.db = db
+
+    def execute(self, agency_id: str, file_name: str, file_data: bytes, content_type: str) -> dict:
+        import uuid
+        import re
+        sanitized_name = re.sub(r'[^a-zA-Z0-9_.-]', '', file_name)
+        blob_path = f"style_profiles/{agency_id}/{uuid.uuid4().hex[:8]}_{sanitized_name}"
+        
+        self.storage.upload_blob_direct(blob_path, file_data, content_type)
+        deleted_paths = self.db.save_style_image(agency_id, blob_path)
+        for path in deleted_paths:
+            self.storage.delete_blob(path)
+            
+        return {"status": "success", "blob_path": blob_path, "evicted_count": len(deleted_paths)}
+
+class UploadTrainingPairUseCase:
+    def __init__(self, storage: IBlobStorage, db: IDatabase):
+        self.storage = storage
+        self.db = db
+
+    def execute(self, agency_id: str, brackets: List[tuple[str, bytes, str]], final_edit: tuple[str, bytes, str]) -> dict:
+        import uuid
+        import re
+        
+        batch_id = uuid.uuid4().hex[:8]
+        bracket_paths = []
+        for file_name, file_data, content_type in brackets:
+            sanitized_name = re.sub(r'[^a-zA-Z0-9_.-]', '', file_name)
+            blob_path = f"training_pairs/{agency_id}/{batch_id}/brackets/{sanitized_name}"
+            self.storage.upload_blob_direct(blob_path, file_data, content_type)
+            bracket_paths.append(blob_path)
+            
+        final_name, final_data, final_content_type = final_edit
+        sanitized_final = re.sub(r'[^a-zA-Z0-9_.-]', '', final_name)
+        final_blob_path = f"training_pairs/{agency_id}/{batch_id}/final/{sanitized_final}"
+        self.storage.upload_blob_direct(final_blob_path, final_data, final_content_type)
+        
+        self.db.save_training_pair(agency_id, bracket_paths, final_blob_path)
+        return {"status": "success", "bracket_paths": bracket_paths, "final_path": final_blob_path}
+
+class OverrideJobImageUseCase:
+    def __init__(self, storage: IBlobStorage, db: IDatabase):
+        self.storage = storage
+        self.db = db
+
+    def execute(self, agency_id: str, job_id: str, final_edit: tuple[str, bytes, str]) -> dict:
+        job = self.db.get_job(job_id)
+        if not job:
+            return {"status": "error", "message": "Job not found"}
+            
+        import uuid
+        import re
+        batch_id = uuid.uuid4().hex[:8]
+        
+        final_name, final_data, final_content_type = final_edit
+        sanitized_final = re.sub(r'[^a-zA-Z0-9_.-]', '', final_name)
+        final_blob_path = f"training_pairs/{agency_id}/{batch_id}/final_override_{sanitized_final}"
+        
+        self.storage.upload_blob_direct(final_blob_path, final_data, final_content_type)
+        
+        bracket_paths = [] 
+        self.db.save_training_pair(agency_id, bracket_paths, final_blob_path)
+        
+        if "result" in job:
+            job["result"]["blob_path"] = final_blob_path
+            try:
+                import cv2
+                import numpy as np
+                final_bgr = cv2.imdecode(np.frombuffer(final_data, np.uint8), cv2.IMREAD_COLOR)
+                h, w = final_bgr.shape[:2]
+                thumb_scale = 800 / max(h, w)
+                thumb_img = cv2.resize(final_bgr, (int(w * thumb_scale), int(h * thumb_scale)), interpolation=cv2.INTER_AREA)
+                _, encoded_thumb = cv2.imencode('.webp', thumb_img, [cv2.IMWRITE_WEBP_QUALITY, 80])
+                thumb_bytes = encoded_thumb.tobytes()
+                
+                thumb_blob_path = f"training_pairs/{agency_id}/{batch_id}/thumb_override_{sanitized_final}.webp"
+                self.storage.upload_blob_direct(thumb_blob_path, thumb_bytes, "image/webp")
+                job["result"]["thumb_blob_path"] = thumb_blob_path
+            except Exception:
+                pass
+                
+            self.db.save_job(job_id, job["session_id"], job["status"], job["idempotency_key"], result=job["result"])
+            
+            return {
+                "status": "success", 
+                "blob_path": final_blob_path, 
+                "thumb_blob_path": job["result"].get("thumb_blob_path"),
+                "url": self.storage.generate_signed_url(final_blob_path),
+                "thumb_url": self.storage.generate_signed_url(job["result"].get("thumb_blob_path")) if job["result"].get("thumb_blob_path") else None
+            }
+        
+        return {"status": "error", "message": "Job had no result"}
+
