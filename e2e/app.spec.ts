@@ -8,7 +8,7 @@ test.describe('Folio App - Full Flow', () => {
 
     // 2. Verify Initial State
     await expect(page.locator('h1')).toContainText('Folio');
-    await expect(page.getByText('Prepare Listing Photos', { exact: false })).toBeVisible();
+    await expect(page.getByText('Add Listing Photos', { exact: false })).toBeVisible();
 
     // 3. Simulate Drag and Drop to trigger Flow A (Confirmation Gate)
     // Instead of mocking, we let it hit the real `uvicorn` backend running with TESTING=true

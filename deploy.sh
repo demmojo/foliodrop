@@ -76,6 +76,8 @@ fi
 
 # 4. Deploy Backend Worker (Cloud Run)
 echo "Deploying Backend Worker..."
+# Note: Ensure GEMINI_API_KEY is created in Secret Manager before running this!
+# e.g., printf "your-key" | gcloud secrets create GEMINI_API_KEY --data-file=-
 gcloud run deploy $BACKEND_SERVICE \
     --source ./backend \
     --region $REGION \
@@ -86,7 +88,8 @@ gcloud run deploy $BACKEND_SERVICE \
     --timeout 3600 \
     --allow-unauthenticated \
     --quiet \
-    --set-env-vars GCP_UPLOAD_BUCKET=$BUCKET_NAME,CLOUD_TASKS_QUEUE=$QUEUE_NAME,REGION=$REGION
+    --set-env-vars GCP_UPLOAD_BUCKET=$BUCKET_NAME,CLOUD_TASKS_QUEUE=$QUEUE_NAME,REGION=$REGION \
+    --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest
 
 # Grant Cloud Tasks permissions to invoke backend
 gcloud run services add-iam-policy-binding $BACKEND_SERVICE \
