@@ -19,20 +19,64 @@ class FirestoreAdapter(IDatabase):
             firebase_admin.initialize_app()
         self.db = firestore.client()
 
-    def create_session(self, session_id: str) -> None:
-        self.db.collection("sessions").document(session_id).set({
-            "created_at": firestore.SERVER_TIMESTAMP,
-            "processed_rooms": 0
-        })
-
-    def update_session(self, session_id: str, data: Dict[str, Any]) -> None:
-        self.db.collection("sessions").document(session_id).update(data)
+    def save_session(self, session_id: str, data: dict) -> None:
+        self.db.collection("sessions").document(session_id).set(data, merge=True)
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         doc = self.db.collection("sessions").document(session_id).get()
         if doc.exists:
             return doc.to_dict()
         return None
+
+    def save_processing_result(self, session_id: str, result: dict):
+        self.db.collection("sessions").document(session_id).collection("results").add(result)
+
+    def get_processing_results(self, session_id: str) -> List[dict]:
+        docs = self.db.collection("sessions").document(session_id).collection("results").stream()
+        return [doc.to_dict() for doc in docs]
+
+    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: Optional[dict] = None, error: Optional[str] = None):
+        job_data = {
+            "id": job_id,
+            "session_id": session_id,
+            "status": status,
+            "idempotency_key": idempotency_key,
+            "updated_at": firestore.SERVER_TIMESTAMP
+        }
+        if result is not None:
+            job_data["result"] = result
+        if error is not None:
+            job_data["error"] = error
+        
+        self.db.collection("jobs").document(job_id).set(job_data, merge=True)
+
+    def get_job(self, job_id: str) -> Optional[dict]:
+        doc = self.db.collection("jobs").document(job_id).get()
+        if doc.exists:
+            return doc.to_dict()
+        return None
+
+    def get_job_by_idempotency_key(self, idempotency_key: str) -> Optional[dict]:
+        docs = self.db.collection("jobs").where("idempotency_key", "==", idempotency_key).limit(1).stream()
+        for doc in docs:
+            return doc.to_dict()
+        return None
+
+    def get_active_jobs(self, session_id: str) -> List[dict]:
+        docs = self.db.collection("jobs").where("session_id", "==", session_id).stream()
+        return [doc.to_dict() for doc in docs]
+
+    def get_jobs(self, job_ids: List[str]) -> List[dict]:
+        if not job_ids:
+            return []
+        
+        # Firestore 'in' query supports up to 30 values
+        results = []
+        for i in range(0, len(job_ids), 30):
+            batch_ids = job_ids[i:i+30]
+            docs = self.db.collection("jobs").where("id", "in", batch_ids).stream()
+            results.extend([doc.to_dict() for doc in docs])
+        return results
 
 class GCSBlobStorageAdapter(IBlobStorage):
     def __init__(self, bucket_name: str):
@@ -69,14 +113,32 @@ class GCSBlobStorageAdapter(IBlobStorage):
         blob_name = f"{session_id}/{filename}"
         blob = bucket.blob(blob_name)
         blob.upload_from_string(data, content_type=content_type)
-        # Assuming bucket is public or we generate a long-lived signed URL. 
-        # For this prototype, let's generate a signed URL valid for 48 hours to match the session TTL.
-        url = blob.generate_signed_url(
-            version="v4",
-            expiration=datetime.timedelta(hours=48),
-            method="GET"
-        )
-        return url
+        return blob_name
+
+    def generate_signed_url(self, blob_path: str, expiration_minutes: int = 15) -> str:
+        # For serverless without private keys, we need to sign with a service account email.
+        # This requires the IAM service account credentials. In production, provide service_account_email.
+        # For simplicity, if standard sign works (e.g. ADC provides a way), we use it.
+        bucket = self.client.bucket(self.bucket_name)
+        blob = bucket.blob(blob_path)
+        
+        service_account_email = os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL")
+        
+        try:
+            url = blob.generate_signed_url(
+                version="v4",
+                expiration=datetime.timedelta(minutes=expiration_minutes),
+                method="GET",
+                service_account_email=service_account_email
+            )
+            return url
+        except Exception as e:
+            logger.warning(f"Failed remote signing, trying standard generate_signed_url: {e}")
+            return blob.generate_signed_url(
+                version="v4",
+                expiration=datetime.timedelta(minutes=expiration_minutes),
+                method="GET"
+            )
 
 class CloudTasksAdapter(ITaskQueue):
     def __init__(self, project_id: str, region: str, queue_name: str):
@@ -100,8 +162,20 @@ class CloudTasksAdapter(ITaskQueue):
         }
         # self.client.create_task(request={"parent": self.queue_path, "task": task})
 
-    def enqueue_perspective_correction(self, session_id: str, room: str) -> None:
-        pass
+    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str]) -> None:
+        import json
+        body_dict = {"job_id": job_id, "session_id": session_id, "room": room_name, "photos": photos}
+        
+        task = {
+            "http_request": {
+                "http_method": tasks_v2.HttpMethod.POST,
+                "url": f"https://{self.region}-{self.project_id}.run.app/api/v1/jobs/process",
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps(body_dict).encode(),
+            }
+        }
+        # self.client.create_task(request={"parent": self.queue_path, "task": task})
+
 
 class RedisPubSubAdapter(IEventPublisher, IProgressSubscriber):
     def __init__(self, redis_url: str):

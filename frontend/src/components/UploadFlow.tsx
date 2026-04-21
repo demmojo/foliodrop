@@ -6,30 +6,14 @@ import clsx from 'clsx';
 import ProcessingConsole from './ProcessingConsole';
 import ReviewGrid from './ReviewGrid';
 import { useTranslation } from '../hooks/useTranslation';
+import { useJobStore, ProcessedHDR } from '../store/useJobStore';
 
 type FlowState = 'IDLE' | 'CONFIRMATION' | 'PROCESSING' | 'REVIEW';
-
-type ProcessedHDR = {
-  id: string;
-  url: string;
-  originalUrl?: string; 
-  listingGroupId: string;
-  captureTime: string;
-  roomName: string;
-  status?: string;
-  isFlagged?: boolean;
-  vlmReport?: any;
-};
 
 export default function UploadFlow() {
   const { t } = useTranslation();
   const [flowState, setFlowState] = useState<FlowState>('IDLE');
   const [isDragging, setIsDragging] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  
-  // We manage the final array of processed photos here now
-  const [processedPhotos, setProcessedPhotos] = useState<ProcessedHDR[]>([]);
-  
   const [stats, setStats] = useState({ brackets: 0, photos: 0, properties: 1 });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -39,32 +23,39 @@ export default function UploadFlow() {
   const urlSessionId = searchParams.get('session');
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+  const { jobs, activeSessionId, setSessionId, rehydrateSession, addJobs, setJobs } = useJobStore();
+
+  // Derived state for processed photos
+  const processedPhotos = Object.values(jobs)
+    .filter(job => job.status === 'COMPLETED' || job.status === 'FLAGGED' || job.status === 'NEEDS_REVIEW' || job.status === 'READY')
+    .map(job => job.result as ProcessedHDR)
+    .filter(Boolean);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
   const handleResumeSession = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`${API_URL}/api/session/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSessionId(id);
-        setProcessedPhotos(data.photos || []);
-        setFlowState('REVIEW');
-      } else {
-        showToast(t('error_session_not_found') || "Session not found");
-      }
-    } catch (error) {
-      showToast(t('error_resume_session') || "Error resuming session");
-    }
-  }, [API_URL, t]);
+    await rehydrateSession(id);
+    setFlowState('REVIEW');
+  }, [rehydrateSession]);
 
   useEffect(() => {
     if (urlSessionId) {
       handleResumeSession(urlSessionId);
     }
   }, [urlSessionId, handleResumeSession]);
+
+  // Check if processing is done
+  useEffect(() => {
+    if (flowState === 'PROCESSING') {
+       const allJobs = Object.values(jobs);
+       if (allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'FLAGGED', 'FAILED', 'NEEDS_REVIEW', 'READY'].includes(j.status))) {
+           setFlowState('REVIEW');
+       }
+    }
+  }, [jobs, flowState]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -87,7 +78,6 @@ export default function UploadFlow() {
     
     setUploadedFiles(files);
     
-    // Very naive heuristic for expected rooms: assume 5 brackets per room
     const estRooms = Math.max(1, Math.floor(files.length / 5));
     setExpectedRooms(estRooms);
     
@@ -113,7 +103,6 @@ export default function UploadFlow() {
     
     setUploadedFiles(files);
     
-    // Very naive heuristic for expected rooms: assume 5 brackets per room
     const estRooms = Math.max(1, Math.floor(files.length / 5));
     setExpectedRooms(estRooms);
     
@@ -131,7 +120,6 @@ export default function UploadFlow() {
       const sid = crypto.randomUUID();
       setSessionId(sid);
       
-      // 1. Get presigned URLs
       const fileNames = uploadedFiles.map(f => f.name);
       const urlRes = await fetch(`${API_URL}/api/v1/upload-urls`, {
         method: 'POST',
@@ -140,7 +128,6 @@ export default function UploadFlow() {
       });
       const urlData = await urlRes.json();
 
-      // 2. Upload directly to GCP (Mocked in local, real in prod)
       await Promise.all(uploadedFiles.map(async (file, idx) => {
          const uploadData = urlData.urls[idx];
          if (uploadData.url.startsWith('http')) {
@@ -148,13 +135,25 @@ export default function UploadFlow() {
          }
       }));
 
-      // 3. Finalize Job (Backend groups by Time/EXIF and queues Cloud Tasks)
+      // Generate Idempotency Key deterministic for the batch
+      // Simple hash approximation for frontend without blocking thread
+      const keyStr = `${sid}-${uploadedFiles[0]?.name}-${uploadedFiles.length}`;
+      const msgUint8 = new TextEncoder().encode(keyStr);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const idempotencyKey = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
       const fileMeta = uploadedFiles.map(f => ({ name: f.name, timestamp: f.lastModified, size: f.size }));
-      await fetch(`${API_URL}/api/v1/finalize-job`, {
+      const finalizeRes = await fetch(`${API_URL}/api/v1/finalize-job`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sid, files: fileMeta })
+        body: JSON.stringify({ session_id: sid, idempotency_key: idempotencyKey, files: fileMeta })
       });
+      
+      const finalizeData = await finalizeRes.json();
+      if (finalizeData.job_ids) {
+          addJobs(finalizeData.job_ids, sid);
+      }
 
     } catch (err) {
       console.error(err);
@@ -163,29 +162,33 @@ export default function UploadFlow() {
     }
   };
 
-  const handleProcessingComplete = (results: ProcessedHDR[] = []) => {
-    setProcessedPhotos(results);
-    setFlowState('REVIEW');
-  };
-
-  // Actions for Review Queue
   const handleKeepItem = (id: string) => {
-      setProcessedPhotos(prev => prev.map(p => 
-          p.id === id ? { ...p, isFlagged: false, status: 'READY' } : p
-      ));
+      setJobs({
+          ...jobs,
+          [id]: {
+              ...jobs[id],
+              result: {
+                  ...jobs[id].result!,
+                  isFlagged: false,
+                  status: 'READY'
+              }
+          }
+      });
   };
 
   const handleDiscardItem = (id: string) => {
-      setProcessedPhotos(prev => prev.filter(p => p.id !== id));
+      const newJobs = { ...jobs };
+      delete newJobs[id];
+      setJobs(newJobs);
   };
 
   const handleFinalExport = () => {
-      const hasUnreviewed = processedPhotos.some(p => p.isFlagged || p.status === 'FLAGGED');
+      const hasUnreviewed = processedPhotos.some(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED');
       if (hasUnreviewed) {
           const proceed = window.confirm("You have unreviewed images in the queue. Exporting will discard them. Proceed?");
           if (!proceed) return;
       }
-      const exportCount = processedPhotos.filter(p => !p.isFlagged && p.status !== 'FLAGGED').length;
+      const exportCount = processedPhotos.filter(p => !p.isFlagged && p.status === 'READY').length;
       showToast(`Exporting batch of ${exportCount} images...`);
   };
 
@@ -252,9 +255,9 @@ export default function UploadFlow() {
 
       {flowState === 'PROCESSING' && (
         <ProcessingConsole 
-          sessionId={sessionId} 
+          sessionId={activeSessionId} 
           expectedRooms={expectedRooms}
-          onComplete={handleProcessingComplete} 
+          onComplete={() => setFlowState('REVIEW')} 
         />
       )}
 

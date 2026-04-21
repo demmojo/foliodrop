@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
-import clsx from 'clsx';
+import { useState, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
+import { useJobStore } from '../store/useJobStore';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
@@ -12,66 +12,36 @@ interface ProcessingConsoleProps {
 
 export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComplete }: ProcessingConsoleProps) {
   const { t } = useTranslation();
+  const { jobs } = useJobStore();
   
   const [realProgress, setRealProgress] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState<string | null>(t('processing') || "Processing...");
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
   useEffect(() => {
     if (!sessionId) return;
 
-    let completedRooms = 0;
-    const allResults: any[] = [];
+    // Filter jobs for this session
+    const sessionJobs = Object.values(jobs).filter(j => j.status !== 'PENDING'); 
+    // Assuming expectedRooms roughly equals job count
+    const totalJobs = Math.max(expectedRooms, sessionJobs.length);
     
-    // Stateless 2-second HTTP polling
-    const pollStatus = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/v1/hdr-jobs/${sessionId}/status`);
-        if (!res.ok) return; // Silent fail on network blips, retry next cycle
-        
-        const data = await res.json();
-        
-        // Ensure we count READY, FLAGGED, and FAILED as completed processing items
-        const finishedItems = (data.results || []).filter((r: any) => 
-           r.status === 'READY' || r.status === 'FLAGGED' || r.status === 'COMPLETED' || r.status === 'FAILED' || r.status === 'error'
-        );
-        completedRooms = finishedItems.length;
-        
-        if (completedRooms > 0 && finishedItems.length > allResults.length) {
-           // We have new results
-           finishedItems.forEach((item: any) => {
-               if (!allResults.find(r => r.room === item.room)) {
-                   allResults.push(item);
-               }
-           });
-        }
+    const completedItems = sessionJobs.filter(j => 
+       ['COMPLETED', 'FLAGGED', 'NEEDS_REVIEW', 'READY', 'FAILED'].includes(j.status)
+    );
+    const completedCount = completedItems.length;
 
-        if (completedRooms >= expectedRooms || data.status === 'JOB_FINISHED') {
-          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-          setRealProgress(100);
-          setStatusMessage(t('status_completed') || "Batch Complete");
-          setTimeout(() => onComplete(allResults), 800);
-        } else {
-          const percent = Math.floor((completedRooms / expectedRooms) * 100);
-          // Fake a minimum 5% progress so the UI feels alive before the first room finishes
-          setRealProgress(percent === 0 ? 5 : percent);
-          setStatusMessage(`Processing (${completedRooms}/${expectedRooms})`);
-        }
-      } catch (err) {
-        console.error("Polling error:", err);
-      }
-    };
-
-    // Poll immediately, then every 2 seconds
-    pollStatus();
-    pollIntervalRef.current = setInterval(pollStatus, 2000);
-
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, [onComplete, sessionId, API_URL, expectedRooms, t]);
+    if (completedCount > 0 && completedCount >= totalJobs) {
+      setRealProgress(100);
+      setStatusMessage(t('status_completed') || "Batch Complete");
+      // Let UploadFlow transition state automatically based on job status,
+      // but we can call onComplete just in case
+      setTimeout(() => onComplete(completedItems.map(j => j.result)), 800);
+    } else {
+      const percent = Math.floor((completedCount / totalJobs) * 100);
+      setRealProgress(percent === 0 ? 5 : percent);
+      setStatusMessage(`Processing (${completedCount}/${totalJobs})`);
+    }
+  }, [jobs, sessionId, expectedRooms, onComplete, t]);
 
   return (
     <div className="w-full max-w-2xl text-center px-6 animate-in fade-in duration-500">

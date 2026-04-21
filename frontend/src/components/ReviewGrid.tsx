@@ -3,21 +3,7 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 import BeforeAfterSlider from './BeforeAfterSlider';
-
-interface ProcessedHDR {
-  id: string;
-  url: string;
-  originalUrl?: string; 
-  listingGroupId: string;
-  captureTime: string;
-  roomName: string;
-  status?: string;
-  isFlagged?: boolean;
-  vlmReport?: {
-      window_reasoning: string;
-      window_score: number;
-  };
-}
+import { ProcessedHDR } from '../store/useJobStore';
 
 interface ReviewGridProps {
   photos: ProcessedHDR[];
@@ -29,8 +15,38 @@ interface ReviewGridProps {
 export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem }: ReviewGridProps) {
   const [loupeImage, setLoupeImage] = useState<ProcessedHDR | null>(null);
 
-  const reviewQueue = photos.filter(p => p.isFlagged || p.status === 'FLAGGED');
-  const cargoGrid = photos.filter(p => !p.isFlagged && p.status !== 'FLAGGED');
+  const reviewQueue = photos.filter(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED');
+  const cargoGrid = photos.filter(p => !p.isFlagged && p.status === 'READY');
+
+  const handleImageError = async (e: React.SyntheticEvent<HTMLImageElement, Event>, originalUrl: string) => {
+      // Very basic URL refresh logic
+      const target = e.currentTarget;
+      // Prevent infinite loops if the URL keeps failing
+      if (target.dataset.retried) return;
+      target.dataset.retried = "true";
+
+      try {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+          // We need to extract the raw path from the signed URL if possible, 
+          // or we just assume we can call an endpoint to get a fresh one based on some path.
+          // For simplicity, let's assume the backend provides a way if we pass the expired URL or path.
+          // In a real implementation we would parse the path from URL.
+          const urlObj = new URL(originalUrl);
+          const blobPath = urlObj.pathname.slice(1); // Remove leading slash
+
+          const res = await fetch(`${API_URL}/api/v1/jobs/batch-signed-url`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ blob_paths: [blobPath] })
+          });
+          const data = await res.json();
+          if (data.urls && data.urls[0]) {
+              target.src = data.urls[0].url;
+          }
+      } catch (err) {
+          console.error("Failed to refresh signed URL", err);
+      }
+  };
 
   return (
     <div className="w-full h-full flex flex-col md:flex-row bg-[#222222] text-[#f5f5f5] font-sans">
@@ -48,8 +64,13 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                    className="w-full aspect-[3/2] bg-black cursor-pointer overflow-hidden rounded relative"
                    onClick={() => setLoupeImage(photo)}
                 >
-                   {photo.url ? (
-                       <img src={photo.url} alt={photo.roomName} className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" />
+                   {photo.thumbUrl || photo.url ? (
+                       <img 
+                          src={photo.thumbUrl || photo.url} 
+                          alt={photo.roomName} 
+                          onError={(e) => handleImageError(e, photo.thumbUrl || photo.url)}
+                          className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
+                       />
                    ) : (
                        <div className="w-full h-full flex items-center justify-center text-white/30 text-xs">Loading...</div>
                    )}
@@ -78,11 +99,11 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     <details className="mt-1">
                         <summary className="text-xs text-white/50 cursor-pointer hover:text-white/80 outline-none list-none">
                             <span className="flex items-center gap-1">
-                                <span className="text-amber-500/80">⚠️ QA Note</span> (Score: {photo.vlmReport.window_score})
+                                <span className="text-amber-500/80">⚠️ QA Note</span> (Score: {photo.vlmReport.window_score || 'N/A'})
                             </span>
                         </summary>
                         <p className="text-[10px] text-white/60 leading-relaxed mt-2 p-2 bg-black/30 rounded border-l-2 border-amber-500/30">
-                            {photo.vlmReport.window_reasoning}
+                            {photo.vlmReport.window_reasoning || JSON.stringify(photo.vlmReport)}
                         </p>
                     </details>
                 )}
@@ -111,7 +132,14 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
             {cargoGrid.map((photo) => (
                <div key={photo.id} className="flex flex-col gap-2">
                  <div className="w-full aspect-[4/3] bg-[#1A1A1A] rounded overflow-hidden">
-                    {photo.url && <img src={photo.url} alt={photo.roomName} className="object-cover w-full h-full" />}
+                    {(photo.thumbUrl || photo.url) && (
+                        <img 
+                            src={photo.thumbUrl || photo.url} 
+                            alt={photo.roomName} 
+                            onError={(e) => handleImageError(e, photo.thumbUrl || photo.url)}
+                            className="object-cover w-full h-full" 
+                        />
+                    )}
                  </div>
                  <div className="text-xs text-white/60 font-medium px-1">{photo.roomName}</div>
                </div>

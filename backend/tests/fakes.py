@@ -6,6 +6,7 @@ class FakeDatabase(IDatabase):
     def __init__(self):
         self.sessions = {}
         self.results = {}
+        self.jobs = {}
         
     def save_session(self, session_id: str, data: dict):
         self.sessions[session_id] = data
@@ -21,6 +22,30 @@ class FakeDatabase(IDatabase):
     def get_processing_results(self, session_id: str) -> List[dict]:
         return self.results.get(session_id, [])
 
+    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: dict = None, error: str = None):
+        if job_id not in self.jobs:
+            self.jobs[job_id] = {"id": job_id, "session_id": session_id, "idempotency_key": idempotency_key}
+        self.jobs[job_id]["status"] = status
+        if result is not None:
+            self.jobs[job_id]["result"] = result
+        if error is not None:
+            self.jobs[job_id]["error"] = error
+
+    def get_job(self, job_id: str) -> dict:
+        return self.jobs.get(job_id)
+
+    def get_job_by_idempotency_key(self, idempotency_key: str) -> dict:
+        for job in self.jobs.values():
+            if job.get("idempotency_key") == idempotency_key:
+                return job
+        return None
+
+    def get_active_jobs(self, session_id: str) -> List[dict]:
+        return [job for job in self.jobs.values() if job.get("session_id") == session_id]
+
+    def get_jobs(self, job_ids: List[str]) -> List[dict]:
+        return [self.jobs[jid] for jid in job_ids if jid in self.jobs]
+
 class FakeBlobStorage(IBlobStorage):
     def generate_upload_urls(self, session_id: str, files: List[str]) -> List[dict]:
         return [{"name": f, "url": f"http://fake-upload/{f}"} for f in files]
@@ -33,8 +58,13 @@ class FakeBlobStorage(IBlobStorage):
     def upload_blob(self, session_id: str, filename: str, data: bytes, content_type: str) -> str:
         return f"http://fake-storage/{session_id}/{filename}"
 
+    def generate_signed_url(self, blob_path: str, expiration_minutes: int = 15) -> str:
+        return f"http://fake-storage/{blob_path}?signed=true"
+
 class FakeTaskQueue(ITaskQueue):
     def enqueue_room_processing(self, session_id: str, room_name: str, photos: List[str]):
+        pass
+    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str]):
         pass
 
 class FakeEventPublisher(IEventPublisher):

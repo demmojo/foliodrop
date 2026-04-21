@@ -3,8 +3,8 @@ import uuid
 import json
 import logging
 import asyncio
-from typing import List, Optional
-from fastapi import FastAPI, Depends, Body, Request, HTTPException
+from typing import List, Optional, Dict
+from fastapi import FastAPI, Depends, Body, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -34,7 +34,10 @@ app.add_middleware(
 # -----------------------------------------------------------------------------
 def get_database() -> IDatabase:
     from backend.tests.fakes import FakeDatabase
-    return FakeDatabase()
+    # In a real app, use a singleton or app state for fake DB to persist across requests
+    if not hasattr(app.state, "db"):
+        app.state.db = FakeDatabase()
+    return app.state.db
 
 def get_blob_storage() -> IBlobStorage:
     from backend.tests.fakes import FakeBlobStorage
@@ -57,12 +60,20 @@ class UploadUrlRequest(BaseModel):
 
 class FinalizeJobRequest(BaseModel):
     session_id: str
+    idempotency_key: str
     files: List[dict]
 
 class CloudTaskPayload(BaseModel):
+    job_id: str
     session_id: str
     room_name: str
     photos: List[str]
+
+class BatchStatusRequest(BaseModel):
+    job_ids: List[str]
+
+class BatchSignedUrlRequest(BaseModel):
+    blob_paths: List[str]
 
 # -----------------------------------------------------------------------------
 # Endpoints
@@ -73,30 +84,80 @@ def generate_upload_urls(req: UploadUrlRequest, storage: IBlobStorage = Depends(
     urls = use_case.execute(req.session_id, req.files)
     return {"urls": urls}
 
-@app.post("/api/v1/finalize-job")
-def finalize_job(req: FinalizeJobRequest, task_queue: ITaskQueue = Depends(get_task_queue)):
-    use_case = FinalizeJobUseCase(task_queue)
-    result = use_case.execute(req.session_id, req.files)
+@app.post("/api/v1/finalize-job", status_code=status.HTTP_202_ACCEPTED)
+def finalize_job(
+    req: FinalizeJobRequest, 
+    task_queue: ITaskQueue = Depends(get_task_queue),
+    db: IDatabase = Depends(get_database)
+):
+    # Check idempotency key
+    existing_job = db.get_job_by_idempotency_key(req.idempotency_key)
+    if existing_job:
+        return {"message": "Job already exists", "job_id": existing_job["id"]}
+
+    use_case = FinalizeJobUseCase(task_queue, db)
+    result = use_case.execute(req.session_id, req.idempotency_key, req.files)
     return result
 
-@app.post("/tasks/process-room")
-async def process_room_task(
+@app.post("/api/v1/jobs/process")
+async def process_job_task(
     payload: CloudTaskPayload, 
     event_publisher: IEventPublisher = Depends(get_event_publisher),
     task_queue: ITaskQueue = Depends(get_task_queue),
     storage: IBlobStorage = Depends(get_blob_storage),
     db: IDatabase = Depends(get_database)
 ):
-    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage)
-    result = await use_case.execute(payload.session_id, payload.room_name, payload.photos)
+    # Update status to PROCESSING
+    job = db.get_job(payload.job_id)
+    if job:
+        db.save_job(payload.job_id, payload.session_id, "PROCESSING", job["idempotency_key"])
+
+    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
+    result = await use_case.execute(payload.job_id, payload.session_id, payload.room_name, payload.photos)
     
-    # Store outcome in the DB so the frontend polling endpoint can read it
-    db.save_processing_result(payload.session_id, result)
+    # Note: DB is updated inside the execute method now to handle both COMPLETED and FAILED
     return result
 
-@app.get("/api/v1/hdr-jobs/{session_id}/status")
-def get_job_status(session_id: str, db: IDatabase = Depends(get_database)):
-    results = db.get_processing_results(session_id)
-    # The frontend uses this to count how many rooms are READY/FLAGGED
-    return {"status": "POLLING", "results": results}
+@app.get("/api/v1/jobs/active")
+def get_active_jobs(session_id: str, db: IDatabase = Depends(get_database)):
+    jobs = db.get_active_jobs(session_id)
+    return {"jobs": jobs}
+
+@app.post("/api/v1/jobs/batch-status")
+def get_batch_status(req: BatchStatusRequest, db: IDatabase = Depends(get_database), storage: IBlobStorage = Depends(get_blob_storage)):
+    jobs = db.get_jobs(req.job_ids)
+    
+    response_jobs = []
+    for job in jobs:
+        job_status = {
+            "id": job["id"],
+            "status": job["status"],
+            "retryAfterSeconds": 10 if job["status"] in ["PENDING", "PROCESSING"] else None,
+            "result": job.get("result"),
+            "error": job.get("error")
+        }
+        
+        # If completed, generate signed URLs
+        if job["status"] == "COMPLETED" and "result" in job:
+            if "blob_path" in job["result"]:
+                job_status["result"]["url"] = storage.generate_signed_url(job["result"]["blob_path"])
+            if "thumb_blob_path" in job["result"]:
+                job_status["result"]["thumb_url"] = storage.generate_signed_url(job["result"]["thumb_blob_path"])
+                
+        response_jobs.append(job_status)
+        
+    return JSONResponse(
+        content={"jobs": response_jobs},
+        headers={"Retry-After": "6"} # Global API rate limit hint
+    )
+
+@app.post("/api/v1/jobs/batch-signed-url")
+def batch_signed_url(req: BatchSignedUrlRequest, storage: IBlobStorage = Depends(get_blob_storage)):
+    urls = []
+    for path in req.blob_paths:
+        urls.append({
+            "path": path,
+            "url": storage.generate_signed_url(path)
+        })
+    return {"urls": urls}
 
