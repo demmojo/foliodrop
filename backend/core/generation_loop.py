@@ -189,7 +189,7 @@ DO NOT add, remove, or modify any room structure not present in inputs."""
         )
         
         response = await client.aio.models.generate_content(
-            model='gemini-3.1-pro-preview',
+            model='gemini-3-pro-image-preview',
             contents=contents,
             config=config
         )
