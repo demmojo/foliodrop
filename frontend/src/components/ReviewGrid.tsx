@@ -4,11 +4,10 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import BeforeAfterSlider from './BeforeAfterSlider';
 
-// Extended type to handle the VLM Quality Report
 interface ProcessedHDR {
   id: string;
   url: string;
-  originalUrl?: string; // Used for "Before" state (Darkest Bracket)
+  originalUrl?: string; 
   listingGroupId: string;
   captureTime: string;
   roomName: string;
@@ -30,23 +29,21 @@ interface ReviewGridProps {
 export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem }: ReviewGridProps) {
   const [loupeImage, setLoupeImage] = useState<ProcessedHDR | null>(null);
 
-  // Split the batch based on the QA Judge Flag
   const reviewQueue = photos.filter(p => p.isFlagged || p.status === 'FLAGGED');
   const cargoGrid = photos.filter(p => !p.isFlagged && p.status !== 'FLAGGED');
 
   return (
-    <div className="w-full h-full flex bg-[#222222] text-[#f5f5f5] font-sans">
+    <div className="w-full h-full flex flex-col md:flex-row bg-[#222222] text-[#f5f5f5] font-sans">
       
-      {/* LEFT SIDEBAR: Review Queue (Only visible if there are flagged images) */}
+      {/* REVIEW QUEUE (LEFT ON DESKTOP, TOP ON MOBILE) */}
       {reviewQueue.length > 0 && (
-        <div className="w-1/4 min-w-[300px] border-r border-white/10 p-4 overflow-y-auto bg-[#1A1A1A]">
+        <div className="w-full md:w-1/3 lg:w-1/4 border-b md:border-b-0 md:border-r border-white/10 p-4 md:overflow-y-auto bg-[#1A1A1A] flex-shrink-0">
           <h3 className="text-xs uppercase tracking-widest text-amber-500 mb-6 font-semibold">
             Needs Review ({reviewQueue.length})
           </h3>
           <div className="flex flex-col gap-6">
             {reviewQueue.map((photo) => (
               <div key={photo.id} className="group flex flex-col gap-2 p-3 bg-[#2D2D2D] rounded-md border border-white/5 hover:border-amber-500/50 transition-colors">
-                {/* Thumbnail triggers Loupe */}
                 <div 
                    className="w-full aspect-[3/2] bg-black cursor-pointer overflow-hidden rounded relative"
                    onClick={() => setLoupeImage(photo)}
@@ -61,10 +58,9 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                    </div>
                 </div>
                 
-                {/* Data & Actions */}
-                <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">{photo.roomName}</span>
-                    <div className="flex gap-2">
+                <div className="flex justify-between items-center mt-1">
+                    <span className="text-sm font-medium truncate pr-2">{photo.roomName}</span>
+                    <div className="flex gap-2 flex-shrink-0">
                         {onKeepItem && (
                             <button onClick={() => onKeepItem(photo.id)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors" title="Dismiss Flag">
                                 ✓ Keep
@@ -78,7 +74,6 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     </div>
                 </div>
                 
-                {/* VLM Chain of Thought Reasoning */}
                 {photo.vlmReport && (
                     <details className="mt-1">
                         <summary className="text-xs text-white/50 cursor-pointer hover:text-white/80 outline-none list-none">
@@ -97,22 +92,22 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
         </div>
       )}
 
-      {/* RIGHT SIDEBAR/MAIN: Cargo Grid (Ready Images) */}
-      <div className={clsx("flex-1 p-8 overflow-y-auto", reviewQueue.length === 0 && "w-full")}>
-         <div className="flex justify-between items-end mb-8">
+      {/* CARGO GRID (RIGHT ON DESKTOP, BOTTOM ON MOBILE) */}
+      <div className={clsx("flex-1 p-4 md:p-8 overflow-y-auto", reviewQueue.length === 0 && "w-full")}>
+         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-8 gap-4">
             <div>
                 <h2 className="text-2xl font-light text-white tracking-tight">Ready for Export</h2>
                 <p className="text-sm text-white/40 mt-1">{cargoGrid.length} images processed successfully.</p>
             </div>
             <button 
               onClick={onConfirm}
-              className="bg-white text-black px-6 py-2 rounded font-medium text-sm hover:bg-white/90 transition-colors uppercase tracking-wider"
+              className="bg-white text-black px-6 py-3 sm:py-2 rounded-full sm:rounded font-medium text-sm hover:bg-white/90 transition-colors uppercase tracking-wider w-full sm:w-auto shadow-sm"
             >
               Export Batch
             </button>
          </div>
 
-         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {cargoGrid.map((photo) => (
                <div key={photo.id} className="flex flex-col gap-2">
                  <div className="w-full aspect-[4/3] bg-[#1A1A1A] rounded overflow-hidden">
@@ -123,24 +118,23 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
             ))}
          </div>
          {cargoGrid.length === 0 && reviewQueue.length > 0 && (
-             <div className="w-full h-64 flex items-center justify-center text-white/20 border border-dashed border-white/10 rounded-lg">
+             <div className="w-full h-48 md:h-64 flex items-center justify-center text-center px-4 text-white/20 border border-dashed border-white/10 rounded-lg">
                  All images require review. Please check the queue.
              </div>
          )}
       </div>
 
-      {/* FULL SCREEN LOUPE MODAL */}
+      {/* LOUPE MODAL */}
       {loupeImage && (
           <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
               <div className="flex justify-between items-center p-4 border-b border-white/10">
                   <div className="flex items-center gap-4">
-                      <span className="text-white font-medium">{loupeImage.roomName}</span>
-                      <span className="text-xs text-amber-500 border border-amber-500/30 bg-amber-500/10 px-2 py-1 rounded">Needs Review</span>
+                      <span className="text-white font-medium truncate max-w-[200px] md:max-w-none">{loupeImage.roomName}</span>
+                      <span className="hidden sm:inline-block text-xs text-amber-500 border border-amber-500/30 bg-amber-500/10 px-2 py-1 rounded">Needs Review</span>
                   </div>
-                  <button onClick={() => setLoupeImage(null)} className="text-white/60 hover:text-white text-xl p-2">&times;</button>
+                  <button onClick={() => setLoupeImage(null)} className="text-white/60 hover:text-white text-3xl p-2 leading-none">&times;</button>
               </div>
-              <div className="flex-1 overflow-hidden relative flex items-center justify-center p-8">
-                 {/* A/B Slider: Before = Darkest Bracket, After = Fused HDR */}
+              <div className="flex-1 overflow-hidden relative flex items-center justify-center p-4 md:p-8">
                  <div className="w-full max-w-6xl aspect-[3/2] relative bg-[#111]">
                     <BeforeAfterSlider 
                        beforeImage={loupeImage.originalUrl || loupeImage.url} 
@@ -148,21 +142,21 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     />
                  </div>
               </div>
-              <div className="p-4 border-t border-white/10 flex justify-center gap-4 bg-[#111]">
+              <div className="p-4 border-t border-white/10 flex justify-center gap-2 sm:gap-4 bg-[#111] pb-safe">
                  {onKeepItem && (
                      <button 
                         onClick={() => { onKeepItem(loupeImage.id); setLoupeImage(null); }}
-                        className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-sm transition-colors uppercase tracking-wider"
+                        className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
                      >
-                         Looks Good - Keep It
+                         Keep
                      </button>
                  )}
                  {onDiscardItem && (
                      <button 
                         onClick={() => { onDiscardItem(loupeImage.id); setLoupeImage(null); }}
-                        className="px-6 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded text-sm transition-colors uppercase tracking-wider"
+                        className="px-4 sm:px-6 py-3 sm:py-2 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
                      >
-                         Discard Image
+                         Discard
                      </button>
                  )}
               </div>

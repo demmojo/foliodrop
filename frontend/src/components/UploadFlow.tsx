@@ -76,6 +76,29 @@ export default function UploadFlow() {
     setIsDragging(false);
   }, []);
 
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const allFiles = Array.from(e.target.files || []);
+    const files = allFiles.filter(file => file.type.startsWith('image/'));
+    
+    if (files.length === 0) {
+        if (allFiles.length > 0) showToast("Only images are supported");
+        return;
+    }
+    
+    setUploadedFiles(files);
+    
+    // Very naive heuristic for expected rooms: assume 5 brackets per room
+    const estRooms = Math.max(1, Math.floor(files.length / 5));
+    setExpectedRooms(estRooms);
+    
+    setStats({
+      brackets: files.length,
+      photos: estRooms,
+      properties: 1
+    });
+    setFlowState('CONFIRMATION');
+  }, []);
+
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -162,7 +185,7 @@ export default function UploadFlow() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
+    <div className="w-full max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] px-4">
       {/* TOAST */}
       {toastMessage && (
         <div className="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-md shadow-lg z-50 animate-in slide-in-from-top-4">
@@ -176,12 +199,29 @@ export default function UploadFlow() {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={clsx(
-            "w-full max-w-4xl p-24 border-2 border-dashed rounded-xl transition-all duration-300 flex flex-col items-center justify-center",
+            "w-full max-w-4xl p-8 md:p-24 border-2 border-dashed rounded-xl transition-all duration-300 flex flex-col items-center justify-center text-center",
             isDragging ? "border-amber-500 bg-amber-500/5 scale-[1.02]" : "border-border/50 bg-secondary/20 hover:border-border hover:bg-secondary/30"
           )}
         >
            <h2 className="text-2xl font-light tracking-tight mb-2">Drop bracketed photos here</h2>
-           <p className="text-muted-foreground text-sm">We'll group, align, and fuse them automatically.</p>
+           <p className="text-muted-foreground text-sm mb-6">We'll group, align, and fuse them automatically.</p>
+           
+           <div className="relative">
+             <input 
+               type="file" 
+               multiple 
+               accept="image/*" 
+               id="mobile-file-upload" 
+               className="hidden" 
+               onChange={handleFileInput} 
+             />
+             <label 
+               htmlFor="mobile-file-upload" 
+               className="px-6 py-3 bg-foreground text-background hover:bg-foreground/90 transition-colors rounded-full font-medium cursor-pointer text-sm uppercase tracking-wider shadow-sm"
+             >
+               Browse Photos
+             </label>
+           </div>
         </div>
       )}
 
@@ -214,7 +254,7 @@ export default function UploadFlow() {
       )}
 
       {flowState === 'REVIEW' && (
-        <div className="w-screen h-[calc(100vh-64px)] absolute top-16 left-0">
+        <div className="w-full h-[calc(100vh-64px)] absolute top-16 left-0 overflow-hidden">
             <ReviewGrid 
                photos={processedPhotos} 
                onConfirm={handleFinalExport}
