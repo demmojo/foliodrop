@@ -20,10 +20,6 @@ export default function Home() {
         <div className="flex items-center gap-3 md:gap-6">
           <LanguageSelector />
           <ThemeToggle />
-          <div className="hidden sm:flex items-center gap-2 px-2 md:px-3 py-1 rounded bg-surface border border-border dark:border-zinc-800">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(22,163,74,0.5)]"></span>
-            <span className="text-[10px] font-mono tracking-widest uppercase text-muted">{t('node_us_central1')}</span>
-          </div>
         </div>
       </header>
 

@@ -4,7 +4,6 @@ export const dictionaries: Record<Language, Record<string, string>> = {
   en: {
     folio: 'Folio',
     beta: 'Beta',
-    node_us_central1: 'Node: us-central1',
     loading_workspace: 'Loading workspace...',
     import_exposures: 'Add Listing Photos',
     drop_brackets: 'Drag and drop your property photos here. Get perfectly balanced, MLS-ready images in seconds.',
@@ -65,7 +64,6 @@ export const dictionaries: Record<Language, Record<string, string>> = {
   sk: {
     folio: 'Folio',
     beta: 'Beta',
-    node_us_central1: 'Uzol: us-central1',
     loading_workspace: 'Načítavanie pracovného priestoru...',
     import_exposures: 'Pripraviť Fotografie na Inzerciu',
     drop_brackets: 'Sem potiahnite a pustite fotografie nehnuteľnosti. Získajte perfektne vyvážené obrázky pripravené na publikovanie v priebehu sekúnd.',
@@ -126,7 +124,6 @@ export const dictionaries: Record<Language, Record<string, string>> = {
   es: {
     folio: 'Folio',
     beta: 'Beta',
-    node_us_central1: 'Nodo: us-central1',
     loading_workspace: 'Cargando espacio de trabajo...',
     import_exposures: 'Preparar Fotos del Listado',
     drop_brackets: 'Arrastre y suelte las fotos de la propiedad aquí. Obtenga imágenes perfectamente equilibradas y listas para publicar en segundos.',
@@ -187,7 +184,6 @@ export const dictionaries: Record<Language, Record<string, string>> = {
   it: {
     folio: 'Folio',
     beta: 'Beta',
-    node_us_central1: 'Nodo: us-central1',
     loading_workspace: 'Caricamento spazio di lavoro...',
     import_exposures: 'Prepara Foto per l\'Annuncio',
     drop_brackets: 'Trascina e rilascia qui le foto della proprietà. Ottieni immagini perfettamente bilanciate e pronte per la pubblicazione in pochi secondi.',
@@ -248,7 +244,6 @@ export const dictionaries: Record<Language, Record<string, string>> = {
   el: {
     folio: 'Folio',
     beta: 'Beta',
-    node_us_central1: 'Κόμβος: us-central1',
     loading_workspace: 'Φόρτωση χώρου εργασίας...',
     import_exposures: 'Προετοιμασία Φωτογραφιών Ακινήτου',
     drop_brackets: 'Σύρετε και αφήστε τις φωτογραφίες του ακινήτου εδώ. Αποκτήστε τέλεια ισορροπημένες εικόνες, έτοιμες για δημοσίευση σε δευτερόλεπτα.',

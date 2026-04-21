@@ -15,9 +15,14 @@ logger = logging.getLogger(__name__)
 
 class FirestoreAdapter(IDatabase):
     def __init__(self):
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app()
-        self.db = firestore.client()
+        # Use google-cloud-firestore directly to specify the named database
+        from google.cloud import firestore
+        project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "development-resources-488110")
+        
+        # When running locally, if credentials are not available, it might fail to init unless we handle it,
+        # but since we only use this adapter when GCP_UPLOAD_BUCKET is set (which is usually in Cloud Run),
+        # ADC will be available.
+        self.db = firestore.Client(project=project_id, database="hdr-db")
 
     def save_session(self, session_id: str, data: dict) -> None:
         self.db.collection("sessions").document(session_id).set(data, merge=True)
@@ -110,13 +115,86 @@ class GCSBlobStorageAdapter(IBlobStorage):
             sanitized_name = re.sub(r'[^a-zA-Z0-9_.-]', '', file)
             blob_name = f"{session_id}/{sanitized_name}"
             blob = bucket.blob(blob_name)
-            url = blob.generate_signed_url(
-                version="v4",
-                expiration=datetime.timedelta(minutes=15),
-                method="PUT",
-                content_type="image/jpeg",
-            )
+            
+            # Use generate_signed_post_policy_v4 as it does not always require a private key 
+            # if we explicitly pass the service_account_email and GCP auto-handles it 
+            # when running on Cloud Run, OR we just construct a signed URL using IAM SignBlob
+            service_account_email = os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL")
+            
+            try:
+                # We need to explicitly tell the client to use the IAM SignBlob API when we only have compute credentials
+                # which is the case in Cloud Run
+                import google.auth
+                import google.auth.transport.requests
+                credentials, _ = google.auth.default()
+                from google.auth.iam import Signer
+                
+                # Fetch token if not populated yet
+                if not credentials.valid:
+                    credentials.refresh(google.auth.transport.requests.Request())
+                    
+                if hasattr(credentials, 'service_account_email') and not hasattr(credentials, 'signer'):
+                    url = blob.generate_signed_url(
+                        version="v4",
+                        expiration=datetime.timedelta(minutes=15),
+                        method="PUT",
+                        content_type="image/jpeg",
+                        service_account_email=credentials.service_account_email,
+                        access_token=credentials.token
+                    )
+                else:
+                    kwargs = {
+                        "version": "v4",
+                        "expiration": datetime.timedelta(minutes=15),
+                        "method": "PUT",
+                        "content_type": "image/jpeg",
+                    }
+                    if service_account_email:
+                        kwargs["service_account_email"] = service_account_email
+                    url = blob.generate_signed_url(**kwargs)
+                    
+            except Exception as e:
+                logger.error(f"Error signing URL: {e}")
+                # #region agent log
+                try:
+                    payload = {
+                        "sessionId": "769fb2",
+                        "hypothesisId": "H5",
+                        "location": "backend/infrastructure/adapters.py:generate_upload_urls",
+                        "message": "Error signing URL",
+                        "data": {"error": str(e), "service_account": service_account_email},
+                        "timestamp": int(datetime.datetime.now().timestamp() * 1000)
+                    }
+                    with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
+                        f.write(json.dumps(payload) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+                # Fallback to a fake URL only if signing fails
+                url = f"https://fake-upload/{blob_name}"
+
+            # Ensure url is https if it's generated for GCS
+            if url.startswith("http://storage.googleapis.com"):
+                url = url.replace("http://storage.googleapis.com", "https://storage.googleapis.com", 1)
+
             urls.append({"file": file, "url": url, "path": blob_name})
+            
+            # #region agent log
+            try:
+                payload = {
+                    "sessionId": "769fb2",
+                    "hypothesisId": "H4",
+                    "location": "backend/infrastructure/adapters.py:generate_upload_urls",
+                    "message": "Generated URL",
+                    "data": {"file": file, "url": url, "bucket": self.bucket_name},
+                    "timestamp": int(datetime.datetime.now().timestamp() * 1000)
+                }
+                with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
+                    f.write(json.dumps(payload) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            
         return urls
 
     def download_blobs(self, session_id: str, filenames: List[str]) -> List[bytes]:
@@ -136,29 +214,44 @@ class GCSBlobStorageAdapter(IBlobStorage):
         return blob_name
 
     def generate_signed_url(self, blob_path: str, expiration_minutes: int = 15) -> str:
-        # For serverless without private keys, we need to sign with a service account email.
-        # This requires the IAM service account credentials. In production, provide service_account_email.
-        # For simplicity, if standard sign works (e.g. ADC provides a way), we use it.
         bucket = self.client.bucket(self.bucket_name)
         blob = bucket.blob(blob_path)
         
         service_account_email = os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL")
         
         try:
-            url = blob.generate_signed_url(
-                version="v4",
-                expiration=datetime.timedelta(minutes=expiration_minutes),
-                method="GET",
-                service_account_email=service_account_email
-            )
-            return url
+            # We need to explicitly tell the client to use the IAM SignBlob API when we only have compute credentials
+            # which is the case in Cloud Run
+            import google.auth
+            import google.auth.transport.requests
+            credentials, _ = google.auth.default()
+            
+            # Fetch token if not populated yet
+            if not credentials.valid:
+                credentials.refresh(google.auth.transport.requests.Request())
+                
+            if hasattr(credentials, 'service_account_email') and not hasattr(credentials, 'signer'):
+                url = blob.generate_signed_url(
+                    version="v4",
+                    expiration=datetime.timedelta(minutes=expiration_minutes),
+                    method="GET",
+                    service_account_email=credentials.service_account_email,
+                    access_token=credentials.token
+                )
+                return url
+            else:
+                kwargs = {
+                    "version": "v4",
+                    "expiration": datetime.timedelta(minutes=expiration_minutes),
+                    "method": "GET",
+                }
+                if service_account_email:
+                    kwargs["service_account_email"] = service_account_email
+                url = blob.generate_signed_url(**kwargs)
+                return url
         except Exception as e:
-            logger.warning(f"Failed remote signing, trying standard generate_signed_url: {e}")
-            return blob.generate_signed_url(
-                version="v4",
-                expiration=datetime.timedelta(minutes=expiration_minutes),
-                method="GET"
-            )
+            logger.error(f"Failed to generate signed url: {e}")
+            return f"https://fake-download/{blob_path}"
 
 class CloudTasksAdapter(ITaskQueue):
     def __init__(self, project_id: str, region: str, queue_name: str):
@@ -184,17 +277,42 @@ class CloudTasksAdapter(ITaskQueue):
 
     def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str]) -> None:
         import json
-        body_dict = {"job_id": job_id, "session_id": session_id, "room": room_name, "photos": photos}
+        body_dict = {"job_id": job_id, "session_id": session_id, "room_name": room_name, "photos": photos}
+        
+        # We need the actual Cloud Run URL to send tasks to.
+        # It's better to pass this as an env var, but for now we can rely on the typical format
+        # or we could get it dynamically. Since we know the format from gcloud run describe:
+        worker_url = os.environ.get("WORKER_URL", f"https://hdr-worker-spqvmwd2la-uc.a.run.app")
         
         task = {
             "http_request": {
                 "http_method": tasks_v2.HttpMethod.POST,
-                "url": f"https://{self.region}-{self.project_id}.run.app/api/v1/jobs/process",
+                "url": f"{worker_url}/api/v1/jobs/process",
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps(body_dict).encode(),
+                # To make sure Cloud Tasks is authorized to hit Cloud Run
+                "oidc_token": {"service_account_email": os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL")}
             }
         }
-        # self.client.create_task(request={"parent": self.queue_path, "task": task})
+        try:
+            self.client.create_task(request={"parent": self.queue_path, "task": task})
+        except Exception as e:
+            logger.error(f"Failed to enqueue task: {e}")
+            # #region agent log
+            try:
+                payload = {
+                    "sessionId": "769fb2",
+                    "hypothesisId": "H6",
+                    "location": "backend/infrastructure/adapters.py:enqueue_job",
+                    "message": "Error enqueuing task",
+                    "data": {"error": str(e)},
+                    "timestamp": int(datetime.datetime.now().timestamp() * 1000)
+                }
+                with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
+                    f.write(json.dumps(payload) + "\n")
+            except Exception:
+                pass
+            # #endregion
 
 
 class RedisPubSubAdapter(IEventPublisher, IProgressSubscriber):

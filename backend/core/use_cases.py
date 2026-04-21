@@ -1,8 +1,11 @@
 import asyncio
 import uuid
 import numpy as np
+import logging
 from typing import List, Optional, Any
 from backend.core.ports import IBlobStorage, ITaskQueue, IEventPublisher, IDatabase
+
+logger = logging.getLogger(__name__)
 
 class GenerateUploadUrlsUseCase:
     def __init__(self, storage: IBlobStorage):
@@ -191,6 +194,7 @@ class ProcessHdrGroupUseCase:
                             gc.collect()
                             if attempt == max_retries:
                                 # Fallback to OpenCV base
+                                final_image_bytes = fused_base_bytes
                                 is_flagged = True
                                 report_data = {"reason": "Structural QA failed 3 times. Falling back to OpenCV base."}
                                 logger.warning(f"Room {room} structural QA failed 3x. Fallback used.")
@@ -199,6 +203,7 @@ class ProcessHdrGroupUseCase:
                         logger.error(f"Generation error on attempt {attempt}: {e}")
                         telemetry.append({"attempt": attempt, "error": str(e)})
                         if attempt == max_retries:
+                            final_image_bytes = fused_base_bytes
                             is_flagged = True
                             report_data = {"reason": f"API Errors exhausted retries. Fallback used: {e}"}
             else:

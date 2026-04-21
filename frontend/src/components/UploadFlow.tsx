@@ -150,7 +150,18 @@ export default function UploadFlow() {
       await Promise.all(uploadedFiles.map(async (file, idx) => {
          const uploadData = urlData.urls[idx];
          if (uploadData.url.startsWith('http')) {
-             await fetch(uploadData.url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type }});
+             try {
+                const putRes = await fetch(uploadData.url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type }});
+                if (!putRes.ok) {
+                   console.error("PUT failed", putRes.status, await putRes.text());
+                   throw new Error(`Upload failed for ${file.name} with status ${putRes.status}`);
+                }
+             } catch (e) {
+                 // #region agent log
+                 fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'769fb2'},body:JSON.stringify({sessionId:'769fb2',location:'frontend/src/components/UploadFlow.tsx:153',message:'upload to blob failed',data:{error: e?.toString(), url: uploadData.url},hypothesisId:'H7',timestamp:Date.now()})}).catch(()=>{});
+                 // #endregion
+                 throw e;
+             }
          }
       }));
 
@@ -228,10 +239,10 @@ export default function UploadFlow() {
       {flowState === 'IDLE' && (
         <div className="w-full flex flex-col items-center">
           {quota && (
-            <div className="mb-6 px-4 py-2 bg-secondary/30 border border-border/50 rounded-full text-sm flex items-center gap-2">
-               <span className="text-muted-foreground">Monthly Usage:</span>
+            <div className="mb-6 px-4 py-2 bg-surface border border-border/50 rounded-full text-sm flex items-center gap-2 shadow-sm">
+               <span className="text-muted">Monthly Usage:</span>
                <span className="font-semibold text-amber-600 dark:text-amber-400">{quota.used} / {quota.limit}</span>
-               <span className="text-muted-foreground ml-1">HDR Scenes ($500 cap)</span>
+               <span className="text-muted ml-1">HDR Scenes ($500 cap)</span>
             </div>
           )}
           <div 
@@ -240,11 +251,11 @@ export default function UploadFlow() {
             onDrop={handleDrop}
             className={clsx(
               "w-full max-w-4xl p-8 md:p-24 border-2 border-dashed rounded-xl transition-all duration-300 flex flex-col items-center justify-center text-center",
-              isDragging ? "border-amber-500 bg-amber-500/5 scale-[1.02]" : "border-border/50 bg-secondary/20 hover:border-border hover:bg-secondary/30"
+              isDragging ? "border-amber-500 bg-amber-500/5 scale-[1.02]" : "border-border/50 bg-surface hover:border-border shadow-sm"
             )}
           >
-             <h2 className="text-2xl font-light tracking-tight mb-2">Drop bracketed photos here</h2>
-             <p className="text-muted-foreground text-sm mb-6">We'll group, align, and fuse them automatically.</p>
+             <h2 className="text-2xl font-light tracking-tight mb-2 text-foreground">Drop bracketed photos here</h2>
+             <p className="text-muted text-sm mb-6">We'll group, align, and fuse them automatically.</p>
              
              <div className="relative">
                <input 
@@ -267,21 +278,21 @@ export default function UploadFlow() {
       )}
 
       {flowState === 'CONFIRMATION' && (
-        <div className="w-full max-w-md bg-secondary/30 border border-border/50 rounded-xl p-8 animate-in zoom-in-95">
-           <h2 className="text-2xl font-light mb-6">Batch Summary</h2>
+        <div className="w-full max-w-md bg-surface border border-border/50 rounded-xl p-8 animate-in zoom-in-95 shadow-md">
+           <h2 className="text-2xl font-light mb-6 text-foreground">Batch Summary</h2>
            <div className="space-y-4 mb-8 text-sm">
               <div className="flex justify-between border-b border-border/50 pb-2">
-                 <span className="text-muted-foreground">Total Files</span>
-                 <span className="font-medium">{stats.brackets}</span>
+                 <span className="text-muted">Total Files</span>
+                 <span className="font-medium text-foreground">{stats.brackets}</span>
               </div>
               <div className="flex justify-between border-b border-border/50 pb-2">
-                 <span className="text-muted-foreground">Estimated Rooms</span>
-                 <span className="font-medium">{stats.photos}</span>
+                 <span className="text-muted">Estimated Rooms</span>
+                 <span className="font-medium text-foreground">{stats.photos}</span>
               </div>
            </div>
            <div className="flex gap-4">
-              <button onClick={() => setFlowState('IDLE')} className="flex-1 py-3 px-4 rounded border border-border hover:bg-secondary transition-colors text-sm uppercase tracking-wider">Cancel</button>
-              <button onClick={processUpload} className="flex-1 py-3 px-4 rounded bg-foreground text-background hover:bg-foreground/90 transition-colors font-medium text-sm uppercase tracking-wider">Process Batch</button>
+              <button onClick={() => setFlowState('IDLE')} className="flex-1 py-3 px-4 rounded border border-border hover:bg-muted/10 text-foreground transition-colors text-sm uppercase tracking-wider">Cancel</button>
+              <button onClick={processUpload} className="flex-1 py-3 px-4 rounded bg-foreground text-background hover:opacity-90 transition-opacity font-medium text-sm uppercase tracking-wider">Process Batch</button>
            </div>
         </div>
       )}

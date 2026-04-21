@@ -59,7 +59,7 @@ class FakeDatabase(IDatabase):
 
 class FakeBlobStorage(IBlobStorage):
     def generate_upload_urls(self, session_id: str, files: List[str]) -> List[dict]:
-        return [{"name": f, "url": f"http://fake-upload/{f}"} for f in files]
+        return [{"file": f, "url": f"https://fake-upload/{f}", "path": f"{session_id}/{f}"} for f in files]
         
     def download_blobs(self, session_id: str, files: List[str]) -> List[bytes]:
         # Return a fake 10x10 black JPEG for testing

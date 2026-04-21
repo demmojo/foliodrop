@@ -123,7 +123,7 @@ async def generate_hybrid_hdr(
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
                 tmp.write(b)
                 tmp_path = tmp.name
-            f = client.files.upload(file=tmp_path, display_name=name)
+            f = client.files.upload(file=tmp_path)
             os.remove(tmp_path)
             return f
             

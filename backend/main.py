@@ -52,19 +52,34 @@ def _log_debug(message: str, data: dict = None, hyp: str = "H1"):
 
 def get_database() -> IDatabase:
     _log_debug("get_database invoked", hyp="H3")
-    from backend.tests.fakes import FakeDatabase
-    # In a real app, use a singleton or app state for fake DB to persist across requests
-    if not hasattr(app.state, "db"):
-        app.state.db = FakeDatabase()
-    return app.state.db
+    if os.environ.get("GCP_UPLOAD_BUCKET"):
+        from backend.infrastructure.adapters import FirestoreAdapter
+        if not hasattr(app.state, "db"):
+            app.state.db = FirestoreAdapter()
+        return app.state.db
+    else:
+        from backend.tests.fakes import FakeDatabase
+        if not hasattr(app.state, "db"):
+            app.state.db = FakeDatabase()
+        return app.state.db
 
 def get_blob_storage() -> IBlobStorage:
-    _log_debug("get_blob_storage invoked", hyp="H1")
+    bucket = os.environ.get("GCP_UPLOAD_BUCKET")
+    _log_debug("get_blob_storage invoked", {"bucket": bucket}, hyp="H1")
+    if bucket:
+        from backend.infrastructure.adapters import GCSBlobStorageAdapter
+        return GCSBlobStorageAdapter(bucket)
     from backend.tests.fakes import FakeBlobStorage
     return FakeBlobStorage()
 
 def get_task_queue() -> ITaskQueue:
-    _log_debug("get_task_queue invoked", hyp="H2")
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "development-resources-488110")
+    region = os.environ.get("REGION", "us-central1")
+    queue_name = os.environ.get("CLOUD_TASKS_QUEUE")
+    _log_debug("get_task_queue invoked", {"queue": queue_name}, hyp="H2")
+    if queue_name:
+        from backend.infrastructure.adapters import CloudTasksAdapter
+        return CloudTasksAdapter(project_id, region, queue_name)
     from backend.tests.fakes import FakeTaskQueue
     return FakeTaskQueue()
 

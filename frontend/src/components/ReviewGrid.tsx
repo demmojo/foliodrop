@@ -49,17 +49,17 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
   };
 
   return (
-    <div className="w-full h-full flex flex-col md:flex-row bg-[#222222] text-[#f5f5f5] font-sans">
+    <div className="w-full h-full flex flex-col md:flex-row bg-background text-foreground font-sans">
       
       {/* REVIEW QUEUE (LEFT ON DESKTOP, TOP ON MOBILE) */}
       {reviewQueue.length > 0 && (
-        <div className="w-full md:w-1/3 lg:w-1/4 border-b md:border-b-0 md:border-r border-white/10 p-4 md:overflow-y-auto bg-[#1A1A1A] flex-shrink-0">
+        <div className="w-full md:w-1/3 lg:w-1/4 border-b md:border-b-0 md:border-r border-border p-4 md:overflow-y-auto bg-surface flex-shrink-0">
           <h3 className="text-xs uppercase tracking-widest text-amber-500 mb-6 font-semibold">
             Needs Review ({reviewQueue.length})
           </h3>
           <div className="flex flex-col gap-6">
             {reviewQueue.map((photo) => (
-              <div key={photo.id} className="group flex flex-col gap-2 p-3 bg-[#2D2D2D] rounded-md border border-white/5 hover:border-amber-500/50 transition-colors">
+              <div key={photo.id} className="group flex flex-col gap-2 p-3 bg-background rounded-md border border-border hover:border-amber-500/50 transition-colors">
                 <div 
                    className="w-full aspect-[3/2] bg-black cursor-pointer overflow-hidden rounded relative"
                    onClick={() => setLoupeImage(photo)}
@@ -72,7 +72,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                           className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
                        />
                    ) : (
-                       <div className="w-full h-full flex items-center justify-center text-white/30 text-xs">Loading...</div>
+                       <div className="w-full h-full flex items-center justify-center text-muted text-xs">Loading...</div>
                    )}
                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                        <span className="text-white text-xs uppercase tracking-widest bg-black/60 px-2 py-1 rounded">Inspect</span>
@@ -83,12 +83,12 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     <span className="text-sm font-medium truncate pr-2">{photo.roomName}</span>
                     <div className="flex gap-2 flex-shrink-0">
                         {onKeepItem && (
-                            <button onClick={() => onKeepItem(photo.id)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors" title="Dismiss Flag">
+                            <button onClick={() => onKeepItem(photo.id)} className="text-xs px-2 py-1 rounded bg-muted/20 hover:bg-muted/40 transition-colors" title="Dismiss Flag">
                                 ✓ Keep
                             </button>
                         )}
                         {onDiscardItem && (
-                            <button onClick={() => onDiscardItem(photo.id)} className="text-xs px-2 py-1 rounded bg-red-500/20 text-red-300 hover:bg-red-500/40 transition-colors" title="Discard Image">
+                            <button onClick={() => onDiscardItem(photo.id)} className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-300 hover:bg-red-500/20 dark:hover:bg-red-500/40 transition-colors" title="Discard Image">
                                 🗑️ Drop
                             </button>
                         )}
@@ -97,12 +97,12 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                 
                 {photo.vlmReport && (
                     <details className="mt-1">
-                        <summary className="text-xs text-white/50 cursor-pointer hover:text-white/80 outline-none list-none">
+                        <summary className="text-xs text-muted cursor-pointer hover:text-foreground outline-none list-none">
                             <span className="flex items-center gap-1">
                                 <span className="text-amber-500/80">⚠️ QA Note</span> (Score: {photo.vlmReport.window_score || 'N/A'})
                             </span>
                         </summary>
-                        <p className="text-[10px] text-white/60 leading-relaxed mt-2 p-2 bg-black/30 rounded border-l-2 border-amber-500/30">
+                        <p className="text-[10px] text-muted leading-relaxed mt-2 p-2 bg-foreground/5 rounded border-l-2 border-amber-500/30">
                             {photo.vlmReport.window_reasoning || JSON.stringify(photo.vlmReport)}
                         </p>
                     </details>
@@ -117,12 +117,12 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
       <div className={clsx("flex-1 p-4 md:p-8 overflow-y-auto", reviewQueue.length === 0 && "w-full")}>
          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-8 gap-4">
             <div>
-                <h2 className="text-2xl font-light text-white tracking-tight">Ready for Export</h2>
-                <p className="text-sm text-white/40 mt-1">{cargoGrid.length} images processed successfully.</p>
+                <h2 className="text-2xl font-light text-foreground tracking-tight">Ready for Export</h2>
+                <p className="text-sm text-muted mt-1">{cargoGrid.length} images processed successfully.</p>
             </div>
             <button 
               onClick={onConfirm}
-              className="bg-white text-black px-6 py-3 sm:py-2 rounded-full sm:rounded font-medium text-sm hover:bg-white/90 transition-colors uppercase tracking-wider w-full sm:w-auto shadow-sm"
+              className="bg-foreground text-background px-6 py-3 sm:py-2 rounded-full sm:rounded font-medium text-sm hover:opacity-90 transition-opacity uppercase tracking-wider w-full sm:w-auto shadow-sm"
             >
               Export Batch
             </button>
@@ -131,7 +131,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {cargoGrid.map((photo) => (
                <div key={photo.id} className="flex flex-col gap-2">
-                 <div className="w-full aspect-[4/3] bg-[#1A1A1A] rounded overflow-hidden">
+                 <div className="w-full aspect-[4/3] bg-surface border border-border rounded overflow-hidden">
                     {(photo.thumbUrl || photo.url) && (
                         <img 
                             src={photo.thumbUrl || photo.url} 
@@ -141,12 +141,12 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                         />
                     )}
                  </div>
-                 <div className="text-xs text-white/60 font-medium px-1">{photo.roomName}</div>
+                 <div className="text-xs text-muted font-medium px-1">{photo.roomName}</div>
                </div>
             ))}
          </div>
          {cargoGrid.length === 0 && reviewQueue.length > 0 && (
-             <div className="w-full h-48 md:h-64 flex items-center justify-center text-center px-4 text-white/20 border border-dashed border-white/10 rounded-lg">
+             <div className="w-full h-48 md:h-64 flex items-center justify-center text-center px-4 text-muted border border-dashed border-border rounded-lg">
                  All images require review. Please check the queue.
              </div>
          )}
@@ -154,7 +154,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
 
       {/* LOUPE MODAL */}
       {loupeImage && (
-          <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+          <div className="fixed inset-0 z-50 bg-black/95 flex flex-col dark text-foreground">
               <div className="flex justify-between items-center p-4 border-b border-white/10">
                   <div className="flex items-center gap-4">
                       <span className="text-white font-medium truncate max-w-[200px] md:max-w-none">{loupeImage.roomName}</span>

@@ -88,7 +88,7 @@ gcloud run deploy $BACKEND_SERVICE \
     --timeout 3600 \
     --allow-unauthenticated \
     --quiet \
-    --set-env-vars GCP_UPLOAD_BUCKET=$BUCKET_NAME,CLOUD_TASKS_QUEUE=$QUEUE_NAME,REGION=$REGION \
+    --set-env-vars GCP_UPLOAD_BUCKET=$BUCKET_NAME,CLOUD_TASKS_QUEUE=$QUEUE_NAME,REGION=$REGION,GOOGLE_SERVICE_ACCOUNT_EMAIL=401808792134-compute@developer.gserviceaccount.com \
     --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest
 
 # Grant Cloud Tasks permissions to invoke backend
