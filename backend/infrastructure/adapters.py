@@ -342,6 +342,13 @@ class CloudTasksAdapter(ITaskQueue):
             logger.error(f"Failed to enqueue task: {e}")
             # #region agent log
             try:
+                import json, time
+                payload = {"sessionId":"daa93d","hypothesisId":"H1","location":"backend/infrastructure/adapters.py:enqueue_job","message":"enqueue task failed","data":{"error": str(e)},"timestamp":int(time.time()*1000)}
+                with open("/home/demmojo/real-estate-hdr/.cursor/debug-daa93d.log", "a") as f: f.write(json.dumps(payload) + "\n")
+            except Exception: pass
+            # #endregion
+            # #region agent log
+            try:
                 payload = {
                     "sessionId": "769fb2",
                     "hypothesisId": "H6",

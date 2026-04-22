@@ -185,6 +185,11 @@ export default function UploadFlow() {
       }
 
       setFlowState('PROCESSING');
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'daa93d'},body:JSON.stringify({sessionId:'daa93d',hypothesisId:'H4',location:'frontend/UploadFlow.tsx:processUploadBatch',message:'transitioning to PROCESSING',data:{},timestamp:Date.now()})}).catch(()=>{});
+      } catch(e) {}
+      // #endregion
 
       const keyStr = `${sid}-${uploadedFiles.length}-${Date.now()}`;
       const msgUint8 = new TextEncoder().encode(keyStr);

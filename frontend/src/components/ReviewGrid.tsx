@@ -119,7 +119,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                             </span>
                         </summary>
                         <p className="text-[10px] text-muted leading-relaxed mt-2 p-2 bg-foreground/5 rounded border-l-2 border-amber-500/30">
-                            {photo.vlmReport.window_reasoning || JSON.stringify(photo.vlmReport)}
+                            {photo.vlmReport.reason || photo.vlmReport.window_reasoning || JSON.stringify(photo.vlmReport)}
                         </p>
                     </details>
                 )}
