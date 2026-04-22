@@ -71,11 +71,22 @@ describe('UploadFlow Component', () => {
       activeSessionId: null,
       quota: { used: 0, limit: 100 },
       styleProfiles: [],
+      toastMessage: null,
+      flowState: 'IDLE',
+      uploadedFiles: [],
+      photoGroups: []
     });
     
-    (global.fetch as any).mockResolvedValue({
-      json: vi.fn().mockResolvedValue({ session_id: 'test-session', urls: [{ url: 'http://upload' }] }),
-      ok: true
+    // Provide a robust default fetch mock to prevent unhandled promise rejections
+    // and missing json() properties from causing cascaded failures in rehydrateSession.
+    (global.fetch as any).mockImplementation((url: string) => {
+        if (url.includes('/api/v1/quota')) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+        }
+        if (url.includes('/api/v1/jobs/active') || url.includes('/api/v1/sessions/')) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   });
 
@@ -467,6 +478,30 @@ describe('UploadFlow Component', () => {
     expect(global.fetch).toHaveBeenCalled();
   });
 
+  it('shows welcome back prompt if hdr_room_code exists in localStorage', async () => {
+    localStorage.setItem('hdr_room_code', 'welcome-back-code');
+    
+    (global.fetch as any).mockImplementation((url: string) => {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+
+    expect(screen.getByText('Welcome Back')).toBeInTheDocument();
+    expect(screen.getByText('welcome-back-code')).toBeInTheDocument();
+
+    const continueBtn = screen.getByText(/Continue in welcome-back-code/i);
+    await act(async () => {
+      fireEvent.click(continueBtn);
+    });
+
+    // Prompt should disappear and rehydrate should be called
+    expect(screen.queryByText('Welcome Back')).not.toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalled();
+  });
+
   it('handles Complete action in Processing Console to Review', async () => {
     await act(async () => {
       render(<UploadFlow />);
@@ -626,11 +661,8 @@ describe('UploadFlow Component', () => {
     }
   });
 
-  it('handles toast messages manually', async () => {
-    // A completely different approach since testing Zustand directly before render in this 
-    // specific component is flaking out due to the complex state machine on mount.
-
-    // 1. Render in IDLE
+  it('handles toast messages', async () => {
+    // Render in IDLE
     (global.fetch as any).mockImplementation((url: string) => {
         if (url.includes('/api/v1/quota')) {
             return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
@@ -645,24 +677,18 @@ describe('UploadFlow Component', () => {
       render(<UploadFlow />);
     });
     
-    // Check it rendered
-    expect(screen.getByText('Import bracketed sets')).toBeInTheDocument();
-
-    // 2. Mock dropping a bad file, which triggers a toast via useJobStore.getState().setToastMessage()
-    // We already have a test for "rejects unsupported files and shows toast", but we want to 
-    // test the *toast element itself* and its content explicitly via data-testid.
-    
+    // Force a toast by rejecting a file (which sets the state internally)
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
     
     await act(async () => {
       fireEvent.change(input, { target: { files: [file] } });
     });
-    
-    // 3. Verify the toast appears
-    const toastElement = await screen.findByTestId('toast-message');
-    expect(toastElement).toBeInTheDocument();
-    expect(toastElement.textContent).toContain('RAW processing is currently not supported');
+
+    // The component should now have set the toast message state and rendered it
+    const toast = await screen.findByTestId('toast-message');
+    expect(toast).toBeInTheDocument();
+    expect(toast.textContent).toContain('RAW processing is currently not supported');
   });
 
   it('handles validation failure with suggested code', async () => {

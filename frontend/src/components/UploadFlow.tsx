@@ -28,6 +28,8 @@ export default function UploadFlow() {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [sessionCode, setSessionCode] = useState<string>('');
   const [sessionCodeError, setSessionCodeError] = useState<string | null>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get('session');
@@ -47,10 +49,11 @@ export default function UploadFlow() {
   }, []);
 
   useEffect(() => {
-    if (flowState === 'IDLE' && !activeSessionId && !sessionCode) {
+    if (flowState === 'IDLE' && !activeSessionId && !sessionCode && !showResumePrompt && !pendingRoomCode) {
       const storedRoomCode = localStorage.getItem('hdr_room_code');
       if (storedRoomCode) {
-        setSessionCode(storedRoomCode);
+        setPendingRoomCode(storedRoomCode);
+        setShowResumePrompt(true);
       } else {
         fetch(`${API_URL}/api/v1/sessions/generate`)
           .then(res => res.json())
@@ -63,7 +66,7 @@ export default function UploadFlow() {
           .catch(console.error);
       }
     }
-  }, [flowState, activeSessionId, sessionCode, API_URL]);
+  }, [flowState, activeSessionId, sessionCode, showResumePrompt, pendingRoomCode, API_URL]);
 
   // Derived state for processed photos
   const processedPhotos = Object.values(jobs)
@@ -416,6 +419,52 @@ export default function UploadFlow() {
         <div className="fixed top-4 right-4 sm:top-8 sm:right-8 z-40 bg-surface/80 backdrop-blur border border-border px-4 py-2 rounded-full shadow-sm flex items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-widest text-muted">Room Code</span>
           <code className="text-sm font-mono font-medium text-foreground">{activeSessionId || sessionCode}</code>
+        </div>
+      )}
+
+      {/* RESUME PROMPT */}
+      {showResumePrompt && pendingRoomCode && flowState === 'IDLE' && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center transition-all duration-300">
+          <div className="bg-surface border border-border shadow-2xl rounded-2xl p-8 max-w-md w-full mx-4 flex flex-col items-center text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-full bg-foreground/5 flex items-center justify-center mb-6">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+            </div>
+            <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2">Welcome Back</h2>
+            <p className="text-muted text-sm leading-relaxed mb-8">
+              We found your previous room <strong>{pendingRoomCode}</strong>. Do you want to continue where you left off or start a new room?
+            </p>
+            <div className="flex flex-col gap-3 w-full">
+              <button
+                onClick={() => {
+                  setSessionCode(pendingRoomCode);
+                  setShowResumePrompt(false);
+                  handleResumeSession(pendingRoomCode);
+                }}
+                className="w-full py-3 bg-foreground text-background rounded-full font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all"
+              >
+                Continue in {pendingRoomCode}
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('hdr_room_code');
+                  setPendingRoomCode(null);
+                  setShowResumePrompt(false);
+                  fetch(`${API_URL}/api/v1/sessions/generate`)
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data.code) {
+                        setSessionCode(data.code);
+                        localStorage.setItem('hdr_room_code', data.code);
+                      }
+                    })
+                    .catch(console.error);
+                }}
+                className="w-full py-3 bg-surface border border-border text-foreground rounded-full font-semibold hover:bg-muted/5 active:scale-95 transition-all"
+              >
+                Start a New Room
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
