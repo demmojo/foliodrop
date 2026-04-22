@@ -18,14 +18,14 @@ describe('ProcessingConsole Component', () => {
   });
 
   it('renders initial state', () => {
-    render(<ProcessingConsole sessionId="sess1" expectedRooms={2} onComplete={vi.fn()} />);
+    render(<ProcessingConsole sessionId="sess1" expectedScenes={2} onComplete={vi.fn()} />);
     
     expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
     expect(screen.getByText('status_aligning...')).toBeInTheDocument();
   });
 
   it('handles null sessionId gracefully', () => {
-    render(<ProcessingConsole sessionId={null} expectedRooms={2} onComplete={vi.fn()} />);
+    render(<ProcessingConsole sessionId={null} expectedScenes={2} onComplete={vi.fn()} />);
     
     // Should still render but not trigger useEffect processing logic
     expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
@@ -33,13 +33,13 @@ describe('ProcessingConsole Component', () => {
 
   it('updates progress when jobs complete and triggers onComplete', () => {
     const onCompleteMock = vi.fn();
-    render(<ProcessingConsole sessionId="sess1" expectedRooms={1} onComplete={onCompleteMock} />);
+    render(<ProcessingConsole sessionId="sess1" expectedScenes={1} onComplete={onCompleteMock} />);
 
     // Add a completed job
     act(() => {
       useJobStore.setState({
         jobs: {
-          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '1.jpg', roomName: 'Room', status: 'READY' } }
+          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '1.jpg', sceneName: 'Room', status: 'READY' } }
         }
       });
     });
@@ -56,7 +56,7 @@ describe('ProcessingConsole Component', () => {
   });
 
   it('simulates progress creep', () => {
-    render(<ProcessingConsole sessionId="sess1" expectedRooms={2} onComplete={vi.fn()} />);
+    render(<ProcessingConsole sessionId="sess1" expectedScenes={2} onComplete={vi.fn()} />);
     
     // Initial display progress is 5%
     expect(screen.getByText('status_aligning...')).toBeInTheDocument();
@@ -72,12 +72,12 @@ describe('ProcessingConsole Component', () => {
     act(() => {
       useJobStore.setState({
         jobs: {
-          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '1.jpg', roomName: 'Room1', status: 'READY' } }
+          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '1.jpg', sceneName: 'Room1', status: 'READY' } }
         }
       });
     });
 
-    // realProgress is now 50% (1 out of 2 expectedRooms)
+    // realProgress is now 50% (1 out of 2 expectedScenes)
     // maxCreep will be 65
     act(() => {
       vi.advanceTimersByTime(30000); // Wait 30 more seconds
@@ -90,9 +90,9 @@ describe('ProcessingConsole Component', () => {
     act(() => {
       useJobStore.setState({
         jobs: {
-          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '1.jpg', roomName: 'Room1', status: 'READY' } },
-          // Note: total jobs is max(expectedRooms(2), sessionJobs.length(2))
-          'job2': { id: 'job2', status: 'PROCESSING', nextPollAt: 0 } // Not completed, but we can set expectedRooms = 3 to get 2/3 = 66% => maxCreep 81
+          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '1.jpg', sceneName: 'Room1', status: 'READY' } },
+          // Note: total jobs is max(expectedScenes(2), sessionJobs.length(2))
+          'job2': { id: 'job2', status: 'PROCESSING', nextPollAt: 0 } // Not completed, but we can set expectedScenes = 3 to get 2/3 = 66% => maxCreep 81
         }
       });
     });
@@ -120,7 +120,7 @@ describe('ProcessingConsole Component', () => {
     expect(screen.getByText('status_denoising...')).toBeInTheDocument();
   });
 
-  it('copies room code to clipboard', async () => {
+  it('copies session code to clipboard', async () => {
     // Mock clipboard
     const writeTextMock = vi.fn();
     Object.defineProperty(navigator, 'clipboard', {
@@ -130,7 +130,7 @@ describe('ProcessingConsole Component', () => {
       configurable: true
     });
 
-    render(<ProcessingConsole sessionId="test-session-123" expectedRooms={2} onComplete={vi.fn()} />);
+    render(<ProcessingConsole sessionId="test-session-123" expectedScenes={2} onComplete={vi.fn()} />);
     
     const copyBtn = screen.getByTitle('Copy to clipboard');
     

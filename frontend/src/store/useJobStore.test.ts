@@ -141,7 +141,7 @@ describe('useJobStore', () => {
             id: 'job1',
             status: 'NEEDS_REVIEW',
             nextPollAt: 0,
-            result: { id: 'job1', url: 'old', roomName: 'Living', status: 'NEEDS_REVIEW' }
+            result: { id: 'job1', url: 'old', sceneName: 'Living', status: 'NEEDS_REVIEW' }
           }
         }
       });
@@ -272,7 +272,7 @@ describe('useJobStore', () => {
       expect(state.jobs['job1'].status).toBe('PENDING');
       expect(state.jobs['job2'].status).toBe('COMPLETED');
       expect(state.jobs['job2'].result?.url).toBe('url2');
-      expect(state.jobs['job2'].result?.roomName).toBe('Kitchen');
+      expect(state.jobs['job2'].result?.sceneName).toBe('Kitchen');
       
       vi.restoreAllMocks();
     });

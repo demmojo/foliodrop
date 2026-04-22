@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useJobStore } from '../store/useJobStore';
-import { Info, Loader2, Copy, Check } from 'lucide-react';
+import { Info, Loader2, Copy, Check, ChevronRight } from 'lucide-react';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
@@ -11,14 +11,32 @@ interface ProcessingConsoleProps {
   onComplete: (data?: any) => void;
 }
 
+const ALL_STAGES = [
+  { threshold: 0, text: "Initializing generative pipeline..." },
+  { threshold: 5, text: "Allocating cloud compute instances..." },
+  { threshold: 12, text: "Analyzing architectural structures..." },
+  { threshold: 20, text: "Aligning bracket exposures..." },
+  { threshold: 30, text: "Extracting windows and highlights..." },
+  { threshold: 40, text: "Fusing dynamic range..." },
+  { threshold: 55, text: "Applying generative tone mapping..." },
+  { threshold: 70, text: "Applying geometry & perspective corrections..." },
+  { threshold: 85, text: "Enhancing micro-contrast & textures..." },
+  { threshold: 92, text: "Running AI color grading..." },
+  { threshold: 98, text: "Finalizing ML outputs..." },
+];
+
 export default function ProcessingConsole({ sessionId, expectedScenes = 1, onComplete }: ProcessingConsoleProps) {
   const { t } = useTranslation();
   const { jobs } = useJobStore();
   
   const [realProgress, setRealProgress] = useState<number>(0);
   const [displayProgress, setDisplayProgress] = useState<number>(0);
-  const [statusMessage, setStatusMessage] = useState<string>("Analyzing image structures");
   const [hasCopied, setHasCopied] = useState(false);
+
+  // Streaming logs state
+  const [visibleLogs, setVisibleLogs] = useState<string[]>([]);
+  const [logQueue, setLogQueue] = useState<string[]>([]);
+  const lastThresholdRef = useRef(-1);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -33,8 +51,8 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
 
     if (completedCount > 0 && completedCount >= totalJobs) {
       setRealProgress(100);
-      setStatusMessage("Finalizing exports");
-      setTimeout(() => onComplete(completedItems.map(j => j.result)), 800);
+      // Let the queue drain before calling onComplete if possible, or just call it after a short delay
+      setTimeout(() => onComplete(completedItems.map(j => j.result)), 2500);
     } else {
       const percent = Math.floor((completedCount / totalJobs) * 100);
       setRealProgress(percent === 0 ? 5 : percent);
@@ -65,31 +83,68 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
     return () => clearInterval(interval);
   }, [realProgress]);
 
-  // Update status message based on simulated progress rather than just time
+  // Enqueue logs based on displayProgress
   useEffect(() => {
-      if (displayProgress >= 100) return;
-      
-      if (displayProgress < 20) setStatusMessage(t('status_aligning'));
-      else if (displayProgress < 50) setStatusMessage(t('status_masking'));
-      else if (displayProgress < 80) setStatusMessage(t('status_fusing'));
-      else setStatusMessage(t('status_denoising'));
+    const newStages = ALL_STAGES.filter(
+      s => s.threshold > lastThresholdRef.current && s.threshold <= displayProgress
+    );
+
+    if (newStages.length > 0) {
+      setLogQueue(prev => [...prev, ...newStages.map(s => s.text)]);
+      lastThresholdRef.current = newStages[newStages.length - 1].threshold;
+    }
   }, [displayProgress]);
+
+  // Dequeue logs one by one with a short delay so the user can read them
+  useEffect(() => {
+    if (logQueue.length > 0) {
+      const timer = setTimeout(() => {
+        setVisibleLogs(prev => {
+           const next = [...prev, logQueue[0]];
+           // Keep at most 5 lines
+           if (next.length > 5) return next.slice(next.length - 5);
+           return next;
+        });
+        setLogQueue(prev => prev.slice(1));
+      }, 1200); // 1.2s delay between streaming lines
+      return () => clearTimeout(timer);
+    }
+  }, [logQueue]);
 
   return (
     <div className="w-full max-w-2xl text-center px-6 animate-in fade-in duration-500 flex flex-col items-center">
-      <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-12 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/60">
+      <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-8 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/60">
         Processing Your Shoot
       </h2>
       
-      <div 
-        className="h-[40px] flex items-center justify-center overflow-hidden relative mb-6"
-        aria-live="polite"
-      >
-         <div className="absolute transition-all duration-300 ease-out w-full flex items-center justify-center gap-3 opacity-100 translate-y-0">
-           <Loader2 className="w-4 h-4 text-muted animate-spin" />
-           <span className="text-xs md:text-sm tracking-widest uppercase text-muted font-medium font-sans">
-             {statusMessage}...
-           </span>
+      {/* Console Streaming Logs */}
+      <div className="w-full max-w-md bg-[#0D0D0C] border border-[#2A2A2A] shadow-2xl rounded-xl p-5 mb-8 h-[160px] relative flex flex-col justify-end text-left overflow-hidden">
+         {/* Top fade out gradient */}
+         <div className="absolute top-0 left-0 w-full h-12 bg-gradient-to-b from-[#0D0D0C] to-transparent z-10" />
+         
+         <div className="flex flex-col gap-3 z-0 w-full">
+            {visibleLogs.length === 0 && (
+               <div className="flex items-center gap-3 text-sm font-mono text-[#8A8A8A] opacity-60">
+                 <Loader2 className="w-4 h-4 animate-spin" />
+                 Waking up pipeline...
+               </div>
+            )}
+            {visibleLogs.map((log, i) => {
+               const isLast = i === visibleLogs.length - 1;
+               const opacity = isLast ? 'opacity-100' : (i === visibleLogs.length - 2 ? 'opacity-70' : 'opacity-40');
+               const color = isLast ? 'text-[#EAEAEA]' : 'text-[#8A8A8A]';
+               
+               return (
+                  <div key={`${log}-${i}`} className={`flex items-center gap-3 text-sm font-mono tracking-tight transition-all duration-500 ${opacity} ${color} ${isLast ? 'translate-x-0' : 'translate-x-0'}`}>
+                     {isLast && displayProgress < 100 ? (
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0 text-[#B0A084]" />
+                     ) : (
+                        <Check className="w-4 h-4 text-[#4E6E50] shrink-0" />
+                     )}
+                     <span className="truncate">{log}</span>
+                  </div>
+               );
+            })}
          </div>
       </div>
 

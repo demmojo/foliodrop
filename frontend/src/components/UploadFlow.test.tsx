@@ -201,7 +201,7 @@ describe('UploadFlow Component', () => {
     await act(async () => {
       useJobStore.setState({
         jobs: {
-          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'test.jpg', roomName: 'Room', status: 'READY' } }
+          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'test.jpg', sceneName: 'Room', status: 'READY' } }
         }
       });
     });
@@ -289,7 +289,7 @@ describe('UploadFlow Component', () => {
     useJobStore.setState({
       activeSessionId: 'sess',
       jobs: {
-        'job1': { id: 'job1', status: 'NEEDS_REVIEW', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', roomName: 'Room', status: 'NEEDS_REVIEW', isFlagged: true } }
+        'job1': { id: 'job1', status: 'NEEDS_REVIEW', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', sceneName: 'Room', status: 'NEEDS_REVIEW', isFlagged: true } }
       }
     });
 
@@ -357,7 +357,7 @@ describe('UploadFlow Component', () => {
     useJobStore.setState({
       activeSessionId: 'sess',
       jobs: {
-        'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', roomName: 'Room', status: 'READY', isFlagged: false } }
+        'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', sceneName: 'Room', status: 'READY', isFlagged: false } }
       }
     });
 
@@ -457,8 +457,8 @@ describe('UploadFlow Component', () => {
     expect(global.fetch).toHaveBeenCalled();
   });
 
-  it('shows welcome back prompt if hdr_room_code exists in localStorage', async () => {
-    localStorage.setItem('hdr_room_code', 'welcome-back-code');
+  it('shows welcome back prompt if hdr_session_code exists in localStorage', async () => {
+    localStorage.setItem('hdr_session_code', 'welcome-back-code');
     
     (global.fetch as any).mockImplementation((url: string) => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -482,11 +482,11 @@ describe('UploadFlow Component', () => {
   });
 
   it('shows welcome back prompt and handles starting a new room', async () => {
-    localStorage.setItem('hdr_room_code', 'welcome-back-code');
+    localStorage.setItem('hdr_session_code', 'welcome-back-code');
     
     const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
       if (url.includes('/api/v1/sessions/generate')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-room-123' }) } as any);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-session-123' }) } as any);
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as any);
     });
@@ -497,7 +497,7 @@ describe('UploadFlow Component', () => {
 
     expect(screen.getByText('Welcome Back')).toBeInTheDocument();
 
-    const startNewBtn = screen.getByText('Start a New Room');
+    const startNewBtn = screen.getByText('Start a New Session');
     await act(async () => {
       fireEvent.click(startNewBtn);
     });
@@ -570,7 +570,7 @@ describe('UploadFlow Component', () => {
     await act(async () => {
       useJobStore.setState({
         jobs: {
-          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'test.jpg', roomName: 'Room', status: 'READY' } }
+          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'test.jpg', sceneName: 'Room', status: 'READY' } }
         }
       });
       // Click the mocked button from the ProcessingConsole mock
@@ -659,12 +659,12 @@ describe('UploadFlow Component', () => {
   it('handles starting a new room', async () => {
     useJobStore.setState({ activeSessionId: null, flowState: 'IDLE' });
     
-    // Reset any pending room code state manually since we are outside the component
-    localStorage.removeItem('hdr_room_code');
+    // Reset any pending session code state manually since we are outside the component
+    localStorage.removeItem('hdr_session_code');
 
     const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
       if (url.includes('/api/v1/sessions/generate')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-room-123' }) } as any);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-session-123' }) } as any);
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as any);
     });
@@ -791,7 +791,7 @@ describe('UploadFlow Component', () => {
       activeSessionId: 'sess',
       flowState: 'REVIEW',
       jobs: {
-        'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', roomName: 'Room', status: 'READY', isFlagged: false } }
+        'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', sceneName: 'Room', status: 'READY', isFlagged: false } }
       }
     });
 

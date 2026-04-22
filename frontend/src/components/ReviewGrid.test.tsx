@@ -10,10 +10,10 @@ vi.mock('./BeforeAfterSlider', () => ({
 
 describe('ReviewGrid Component', () => {
   const mockPhotos: ProcessedHDR[] = [
-    { id: '1', url: 'http://example.com/1.jpg', thumbUrl: 'http://example.com/1.jpg', originalUrl: 'http://example.com/1_orig.jpg', roomName: 'Kitchen', status: 'READY', isFlagged: false },
-    { id: '2', url: 'http://example.com/2.jpg', thumbUrl: 'http://example.com/2.jpg', originalUrl: 'http://example.com/2_orig.jpg', roomName: 'Living Room', status: 'NEEDS_REVIEW', isFlagged: false, vlmReport: { window_score: 'Bad', reason: 'Too bright' } },
-    { id: '3', url: 'http://example.com/3.jpg', thumbUrl: 'http://example.com/3.jpg', originalUrl: 'http://example.com/3_orig.jpg', roomName: 'Bedroom', status: 'READY', isFlagged: false },
-    { id: '4', url: 'http://example.com/4.jpg', thumbUrl: 'http://example.com/4.jpg', originalUrl: 'http://example.com/4_orig.jpg', roomName: '', status: 'READY', isFlagged: false }, // empty room name
+    { id: '1', url: 'http://example.com/1.jpg', thumbUrl: 'http://example.com/1.jpg', originalUrl: 'http://example.com/1_orig.jpg', sceneName: 'Kitchen', status: 'READY', isFlagged: false },
+    { id: '2', url: 'http://example.com/2.jpg', thumbUrl: 'http://example.com/2.jpg', originalUrl: 'http://example.com/2_orig.jpg', sceneName: 'Living Room', status: 'NEEDS_REVIEW', isFlagged: false, vlmReport: { window_score: 'Bad', reason: 'Too bright' } },
+    { id: '3', url: 'http://example.com/3.jpg', thumbUrl: 'http://example.com/3.jpg', originalUrl: 'http://example.com/3_orig.jpg', sceneName: 'Bedroom', status: 'READY', isFlagged: false },
+    { id: '4', url: 'http://example.com/4.jpg', thumbUrl: 'http://example.com/4.jpg', originalUrl: 'http://example.com/4_orig.jpg', sceneName: '', status: 'READY', isFlagged: false }, // empty room name
   ];
 
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe('ReviewGrid Component', () => {
   it('handles image error by refreshing the src via fetch', async () => {
     // Re-render with realistic URL to hit the `URL(originalUrl)` branch
     const mockPhotosUrl: ProcessedHDR[] = [
-      { id: '1', url: 'http://example.com/1.jpg', thumbUrl: 'http://example.com/1.jpg', originalUrl: 'http://example.com/1_orig.jpg', roomName: 'Kitchen', status: 'READY', isFlagged: false },
+      { id: '1', url: 'http://example.com/1.jpg', thumbUrl: 'http://example.com/1.jpg', originalUrl: 'http://example.com/1_orig.jpg', sceneName: 'Kitchen', status: 'READY', isFlagged: false },
     ];
     
     const mockFetch = vi.fn().mockResolvedValue({
@@ -65,7 +65,7 @@ describe('ReviewGrid Component', () => {
     };
 
     // Use a unique room name to find the image easily
-    const uniqueRoomPhoto = { ...badUrlPhoto, roomName: 'Bad URL Room' };
+    const uniqueRoomPhoto = { ...badUrlPhoto, sceneName: 'Bad URL Room' };
 
     render(<ReviewGrid photos={[uniqueRoomPhoto]} onConfirm={vi.fn()} />);
 
@@ -88,7 +88,7 @@ describe('ReviewGrid Component', () => {
   it('handles image error fetch failures gracefully', async () => {
     // Render with realistic URL to hit the `URL(originalUrl)` branch
     const mockPhotosUrl: ProcessedHDR[] = [
-      { id: '1', url: 'http://example.com/1.jpg', thumbUrl: 'http://example.com/1.jpg', originalUrl: 'http://example.com/1_orig.jpg', roomName: 'Kitchen', status: 'READY', isFlagged: false },
+      { id: '1', url: 'http://example.com/1.jpg', thumbUrl: 'http://example.com/1.jpg', originalUrl: 'http://example.com/1_orig.jpg', sceneName: 'Kitchen', status: 'READY', isFlagged: false },
     ];
     
     const mockFetch = vi.fn().mockRejectedValue(new Error("Network Error"));
@@ -235,7 +235,7 @@ describe('ReviewGrid Component', () => {
 
   it('renders loading placeholder when url is missing', () => {
     const photosWithoutUrl: ProcessedHDR[] = [
-      { id: '1', url: '', thumbUrl: '', roomName: 'Loading Room', status: 'NEEDS_REVIEW', isFlagged: false }
+      { id: '1', url: '', thumbUrl: '', sceneName: 'Loading Room', status: 'NEEDS_REVIEW', isFlagged: false }
     ];
     render(<ReviewGrid photos={photosWithoutUrl} onConfirm={vi.fn()} />);
     expect(screen.getByTestId('loading-placeholder')).toBeInTheDocument();
@@ -243,8 +243,8 @@ describe('ReviewGrid Component', () => {
 
   it('renders "All images require review" message when cargo grid is empty and queue is not', () => {
     const onlyReviewPhotos: ProcessedHDR[] = [
-      { id: '1', url: 'http://test.com/1.jpg', thumbUrl: 'http://test.com/t1.jpg', roomName: 'Review 1', status: 'NEEDS_REVIEW', isFlagged: false },
-      { id: '2', url: 'http://test.com/2.jpg', thumbUrl: 'http://test.com/t2.jpg', roomName: 'Review 2', status: 'FLAGGED', isFlagged: true }
+      { id: '1', url: 'http://test.com/1.jpg', thumbUrl: 'http://test.com/t1.jpg', sceneName: 'Review 1', status: 'NEEDS_REVIEW', isFlagged: false },
+      { id: '2', url: 'http://test.com/2.jpg', thumbUrl: 'http://test.com/t2.jpg', sceneName: 'Review 2', status: 'FLAGGED', isFlagged: true }
     ];
     render(<ReviewGrid photos={onlyReviewPhotos} onConfirm={vi.fn()} />);
     expect(screen.getByTestId('review-all-msg')).toBeInTheDocument();
@@ -252,7 +252,7 @@ describe('ReviewGrid Component', () => {
 
   it('handles image error with unparseable http URL', async () => {
     const invalidUrlPhotos: ProcessedHDR[] = [
-      { id: '1', url: 'http://[invalid-url', thumbUrl: 'http://[invalid-url', roomName: 'Test Room', status: 'READY', isFlagged: false }
+      { id: '1', url: 'http://[invalid-url', thumbUrl: 'http://[invalid-url', sceneName: 'Test Room', status: 'READY', isFlagged: false }
     ];
     render(<ReviewGrid photos={invalidUrlPhotos} onConfirm={vi.fn()} />);
 

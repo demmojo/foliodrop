@@ -29,7 +29,7 @@ export default function UploadFlow() {
   const [sessionCode, setSessionCode] = useState<string>('');
   const [sessionCodeError, setSessionCodeError] = useState<string | null>(null);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
-  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
+  const [pendingSessionCode, setPendingSessionCode] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get('session');
@@ -49,10 +49,10 @@ export default function UploadFlow() {
   }, []);
 
   useEffect(() => {
-    if (flowState === 'IDLE' && !activeSessionId && !sessionCode && !showResumePrompt && !pendingRoomCode) {
-      const storedRoomCode = localStorage.getItem('hdr_room_code');
-      if (storedRoomCode) {
-        setPendingRoomCode(storedRoomCode);
+    if (flowState === 'IDLE' && !activeSessionId && !sessionCode && !showResumePrompt && !pendingSessionCode) {
+      const storedSessionCode = localStorage.getItem('hdr_session_code');
+      if (storedSessionCode) {
+        setPendingSessionCode(storedSessionCode);
         setShowResumePrompt(true);
       } else {
         fetch(`${API_URL}/api/v1/sessions/generate`)
@@ -60,13 +60,13 @@ export default function UploadFlow() {
           .then(data => {
             if (data.code) {
               setSessionCode(data.code);
-              localStorage.setItem('hdr_room_code', data.code);
+              localStorage.setItem('hdr_session_code', data.code);
             }
           })
           .catch(console.error);
       }
     }
-  }, [flowState, activeSessionId, sessionCode, showResumePrompt, pendingRoomCode, API_URL]);
+  }, [flowState, activeSessionId, sessionCode, showResumePrompt, pendingSessionCode, API_URL]);
 
   // Derived state for processed photos
   const processedPhotos = Object.values(jobs)
@@ -80,7 +80,7 @@ export default function UploadFlow() {
   };
 
   const handleResumeSession = useCallback(async (id: string) => {
-    localStorage.setItem('hdr_room_code', id);
+    localStorage.setItem('hdr_session_code', id);
     await rehydrateSession(id);
     setFlowState('REVIEW');
   }, [rehydrateSession]);
@@ -130,6 +130,35 @@ export default function UploadFlow() {
     };
   }, [flowState]);
 
+  const generateThumbnail = async (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const maxDim = 256;
+            let w = img.width;
+            let h = img.height;
+            if (w > h) {
+                if (w > maxDim) { h *= maxDim / w; w = maxDim; }
+            } else {
+                if (h > maxDim) { w *= maxDim / h; h = maxDim; }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            ctx?.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.6));
+            URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+            // Fallback for HEIC or unsupported
+            resolve('');
+        };
+        img.src = url;
+    });
+  };
+
   const processSelectedFiles = async (allFiles: File[]) => {
     const SUPPORTED_TYPES = ['image/jpeg', 'image/png', 'image/tiff', 'image/heic', 'image/heif'];
     const files = allFiles.filter(file => {
@@ -153,6 +182,53 @@ export default function UploadFlow() {
     try {
       const metas = await parsePhotoMetadata(files);
       setUploadedFiles(metas);
+      
+      const sorted = [...metas].sort((a,b) => a.captureTime - b.captureTime);
+      const noExposureData = sorted.every(m => m.exposureCompensation === undefined && m.exposureTime === undefined);
+      
+      // If we don't have exposure data and there are more than 5 photos, it's very likely they are multiple brackets 
+      // but without EXIF data we can't reliably group them just by time (due to download/transfer delays).
+      // So we use the visual AI fallback instead of blindly chunking by 5.
+      if (noExposureData && sorted.length > 5) {
+          showToast("EXIF metadata is missing. Using Visual AI to accurately group your scenes. This may take a moment...");
+          
+          const thumbnails = await Promise.all(sorted.map(async (meta) => {
+              const b64 = await generateThumbnail(meta.file);
+              return { name: meta.file.name, thumbnail: b64, meta };
+          }));
+          
+          const validThumbnails = thumbnails.filter(t => t.thumbnail);
+          
+          if (validThumbnails.length === thumbnails.length) {
+              try {
+                  const res = await fetch(`${API_URL}/api/v1/group-photos`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ files: validThumbnails.map(t => ({ name: t.name, thumbnail: t.thumbnail })) })
+                  });
+                  if (res.ok) {
+                      const data = await res.json();
+                      if (data.groups && Array.isArray(data.groups)) {
+                          const geminiGroups = data.groups.map((groupNames: string[], index: number) => {
+                              const groupMetas = groupNames.map(name => sorted.find(m => m.file.name === name)).filter(Boolean) as PhotoMeta[];
+                              return {
+                                  id: `gemini-scene-${index}-${crypto.randomUUID()}`,
+                                  photos: groupMetas,
+                                  previewUrl: groupMetas.length > 0 ? groupMetas[Math.floor(groupMetas.length / 2)].previewUrl : ''
+                              };
+                          }).filter((g: any) => g.photos.length > 0);
+                          
+                          setPhotoGroups(geminiGroups);
+                          setFlowState('CONFIRMATION');
+                          return;
+                      }
+                  }
+              } catch (e) {
+                  console.error("Gemini grouping failed, using fallback", e);
+              }
+          }
+      }
+      
       const groups = groupPhotosIntoScenes(metas);
       setPhotoGroups(groups);
       setFlowState('CONFIRMATION');
@@ -174,9 +250,9 @@ export default function UploadFlow() {
   };
 
   const processUploadBatch = async () => {
-    const estRooms = photoGroups.length;
-    if (quota && quota.used + estRooms > quota.limit) {
-      showToast(`Quota Exceeded! You have ${quota.limit - quota.used} runs remaining, but are trying to process ${estRooms} scenes.`);
+    const estScenes = photoGroups.length;
+    if (quota && quota.used + estScenes > quota.limit) {
+      showToast(`Quota Exceeded! You have ${quota.limit - quota.used} runs remaining, but are trying to process ${estScenes} scenes.`);
       return;
     }
 
@@ -185,30 +261,16 @@ export default function UploadFlow() {
 
     try {
       if (sessionCode.length < 6) {
-         showToast("Room code must be at least 6 characters.");
-         setFlowState('IDLE');
-         return;
-      }
-      
-      const valRes = await fetch(`${API_URL}/api/v1/sessions/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: sessionCode })
-      });
-      const valData = await valRes.json();
-      if (!valData.valid) {
-         setSessionCodeError(valData.message);
-         if (valData.suggested) setSessionCode(valData.suggested);
-         showToast("Room code unavailable. Please check the suggested code.");
+         showToast("Room code must be at least 3 characters.");
          setFlowState('IDLE');
          return;
       }
       
       const sid = sessionCode;
       setSessionId(sid);
-      localStorage.setItem('hdr_room_code', sid);
+      localStorage.setItem('hdr_session_code', sid);
       
-      const newSession = { id: sid, date: Date.now(), count: estRooms };
+      const newSession = { id: sid, date: Date.now(), count: estScenes };
       const updatedSessions = [newSession, ...recentSessions].slice(0, 20);
       setRecentSessions(updatedSessions);
       try {
@@ -267,16 +329,26 @@ export default function UploadFlow() {
       const idempotencyKey = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
       // Pass the *unique* names so the backend can group the correct blobs
-      const fileMeta = filePayloads.map(fp => ({ 
-        name: fp.uniqueName, 
-        timestamp: fp.meta.captureTime, 
-        size: fp.file.size 
-      }));
+      const groupedFiles = photoGroups.map((group, idx) => {
+          return {
+              name: `Scene ${idx + 1}`,
+              files: group.photos.map(p => {
+                  const fp = filePayloads.find(f => f.file === p.file);
+                  return fp ? fp.uniqueName : p.file.name;
+              }).filter(Boolean)
+          };
+      });
+
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ca7b1'},body:JSON.stringify({sessionId:'8ca7b1',hypothesisId:'H_FRONTEND_PAYLOAD',location:'UploadFlow:processUploadBatch',message:'sending finalize payload',data:{numGroups: groupedFiles.length, groupsSizes: groupedFiles.map(g => g.files.length)},timestamp:Date.now()})}).catch(()=>{});
+      } catch(e) {}
+      // #endregion
 
       const finalizeRes = await fetch(`${API_URL}/api/v1/finalize-job`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sid, idempotency_key: idempotencyKey, files: fileMeta })
+        body: JSON.stringify({ session_id: sid, idempotency_key: idempotencyKey, groups: groupedFiles })
       });
       
       const finalizeData = await finalizeRes.json();
@@ -311,6 +383,19 @@ export default function UploadFlow() {
       const newJobs = { ...jobs };
       delete newJobs[id];
       setJobs(newJobs);
+      
+      if (Object.keys(newJobs).length === 0) {
+          setFlowState('IDLE');
+          setSessionId(null);
+          setSessionCode('');
+          setPhotoGroups([]);
+          setUploadedFiles([]);
+          localStorage.removeItem('hdr_session_code');
+          // Clear query params if any
+          if (window.location.search) {
+              window.history.pushState({}, '', window.location.pathname);
+          }
+      }
   };
 
   const handleFinalExport = async () => {
@@ -414,16 +499,9 @@ export default function UploadFlow() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto flex flex-col items-center justify-center min-h-[calc(100dvh-8rem)] px-4 pb-safe pt-safe sm:pb-12 sm:pt-8 relative">
-      {/* ALWAYS VISIBLE ROOM CODE */}
-      {(sessionCode || activeSessionId) && flowState !== 'IDLE' && (
-        <div className="fixed top-4 right-4 sm:top-8 sm:right-8 z-40 bg-surface/80 backdrop-blur border border-border px-4 py-2 rounded-full shadow-sm flex items-center gap-3">
-          <span className="text-xs font-semibold uppercase tracking-widest text-muted">Room Code</span>
-          <code className="text-sm font-mono font-medium text-foreground">{activeSessionId || sessionCode}</code>
-        </div>
-      )}
 
       {/* RESUME PROMPT */}
-      {showResumePrompt && pendingRoomCode && flowState === 'IDLE' && (
+      {showResumePrompt && pendingSessionCode && flowState === 'IDLE' && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center transition-all duration-300">
           <div className="bg-surface border border-border shadow-2xl rounded-2xl p-8 max-w-md w-full mx-4 flex flex-col items-center text-center animate-in zoom-in-95">
             <div className="w-16 h-16 rounded-full bg-foreground/5 flex items-center justify-center mb-6">
@@ -431,29 +509,29 @@ export default function UploadFlow() {
             </div>
             <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2">Welcome Back</h2>
             <p className="text-muted text-sm leading-relaxed mb-8">
-              We found your previous room <strong>{pendingRoomCode}</strong>. Do you want to continue where you left off or start a new room?
+              We found your previous session <strong>{pendingSessionCode}</strong>. Do you want to continue where you left off or start a new session?
             </p>
             <div className="flex flex-col gap-3 w-full">
               <button
                 onClick={() => {
-                  setSessionCode(pendingRoomCode);
+                  setSessionCode(pendingSessionCode);
                   setShowResumePrompt(false);
-                  handleResumeSession(pendingRoomCode);
+                  handleResumeSession(pendingSessionCode);
                 }}
                 className="w-full py-3 bg-foreground text-background rounded-full font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all"
               >
-                Continue in {pendingRoomCode}
+                Continue in {pendingSessionCode}
               </button>
-            <button
+              <button
               onClick={() => {
-                localStorage.removeItem('hdr_room_code');
-                setPendingRoomCode(null);
+                localStorage.removeItem('hdr_session_code');
+                setPendingSessionCode(null);
                 setShowResumePrompt(false);
                 // Let the useEffect handle the generation
               }}
               className="w-full py-3 bg-surface border border-border text-foreground rounded-full font-semibold hover:bg-muted/5 active:scale-95 transition-all"
             >
-              Start a New Room
+              Start a New Session
             </button>
             </div>
           </div>
@@ -530,7 +608,7 @@ export default function UploadFlow() {
           
           <div className="mt-16 w-full max-w-md pt-8 border-t border-border flex flex-col items-center gap-4 relative z-10">
             <h3 className="text-sm font-medium text-foreground">Room Code</h3>
-            <div className="flex w-full gap-2">
+            <div className="relative w-full max-w-[320px]">
               <input
                 type="text"
                 value={sessionCode}
@@ -538,39 +616,13 @@ export default function UploadFlow() {
                   setSessionCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
                   setSessionCodeError(null);
                 }}
-                onBlur={async () => {
-                  if (!sessionCode || sessionCode.length < 6) {
-                    setSessionCodeError("Must be at least 6 characters.");
-                    return;
-                  }
-                  
-                  // Don't validate if it's the exact code we just generated or auto-loaded
-                  const storedRoomCode = localStorage.getItem('hdr_room_code');
-                  if (sessionCode === storedRoomCode) return;
-                  
-                  try {
-                    const res = await fetch(`${API_URL}/api/v1/sessions/validate`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ code: sessionCode })
-                    });
-                    
-                    if (!res.ok) throw new Error("Validation failed");
-                    
-                    const data = await res.json();
-                    if (!data.valid) {
-                      setSessionCodeError(data.message || "Code unavailable.");
-                      if (data.suggested) {
-                        setSessionCode(data.suggested);
-                        setSessionCodeError(`Unavailable. We've suggested: ${data.suggested}`);
-                      }
-                    }
-                  } catch (e) {
-                     console.error(e);
+                onBlur={() => {
+                  if (!sessionCode || sessionCode.length < 3) {
+                    setSessionCodeError("Must be at least 3 characters.");
                   }
                 }}
-                placeholder="Enter new or existing code"
-                className="flex-1 bg-surface border border-border rounded-lg px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 font-mono text-center"
+                placeholder="Enter room code"
+                className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 font-mono text-center"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     if (sessionCode) handleResumeSession(sessionCode);
@@ -583,7 +635,7 @@ export default function UploadFlow() {
                 onClick={() => {
                   if (sessionCode) handleResumeSession(sessionCode);
                 }}
-                className="px-4 py-2 bg-foreground text-background rounded-lg text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all whitespace-nowrap"
+                className="absolute right-1 top-1 bottom-1 px-4 bg-foreground text-background rounded-md text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all whitespace-nowrap"
               >
                 Resume
               </button>
@@ -595,6 +647,7 @@ export default function UploadFlow() {
 
             <button
               onClick={() => {
+                localStorage.removeItem('hdr_session_code');
                 localStorage.removeItem('hdr_room_code');
                 setSessionCode('');
                 // Let the useEffect handle the generation
@@ -606,7 +659,7 @@ export default function UploadFlow() {
 
             {recentSessions.length > 0 && (
               <div className="w-full mt-6 flex flex-col gap-2">
-                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Recent Rooms</h4>
+                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Recent Sessions</h4>
                 <div className="flex flex-col gap-2 relative">
                   {recentSessions.slice(0, showAllSessions ? recentSessions.length : 2).map((session, i) => (
                     <button
@@ -646,7 +699,7 @@ export default function UploadFlow() {
                     onClick={() => setShowAllSessions(true)}
                     className="text-xs text-muted hover:text-foreground font-medium mt-2 transition-colors py-1 z-30"
                   >
-                    Show {recentSessions.length - 2} more rooms
+                    Show {recentSessions.length - 2} more sessions
                   </button>
                 )}
               </div>
