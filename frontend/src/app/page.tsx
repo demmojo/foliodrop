@@ -31,9 +31,11 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col w-full relative p-4 md:p-8">
+      <div className="flex-1 flex flex-col w-full relative">
         {showSettings ? (
-          <AgencySettings />
+          <div className="p-4 md:p-8">
+            <AgencySettings />
+          </div>
         ) : (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center p-8"><span className="animate-pulse text-muted">{t('loading_workspace')}</span></div>}>
             <UploadFlow />

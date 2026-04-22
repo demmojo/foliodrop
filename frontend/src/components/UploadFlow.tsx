@@ -307,7 +307,7 @@ export default function UploadFlow() {
   };
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] px-4 pb-12 pt-8">
+    <div className="w-full max-w-[1600px] mx-auto flex flex-col items-center justify-center min-h-[calc(100dvh-8rem)] px-4 pb-safe pt-safe sm:pb-12 sm:pt-8">
       {/* GLOBAL DRAG OVERLAY */}
       {isDragging && flowState === 'IDLE' && (
         <div 
@@ -343,17 +343,17 @@ export default function UploadFlow() {
       {/* STATE: IDLE */}
       {flowState === 'IDLE' && (
         <div className="w-full flex flex-col items-center animate-in fade-in duration-700">
-          <div className="w-full max-w-3xl aspect-[16/9] md:aspect-[21/9] bg-surface border border-border shadow-sm rounded-2xl flex flex-col items-center justify-center text-center p-8 relative overflow-hidden group">
+          <div className="w-full max-w-3xl min-h-[300px] md:aspect-[21/9] bg-surface border border-border shadow-sm rounded-2xl flex flex-col items-center justify-center text-center p-6 sm:p-8 relative overflow-hidden group">
             
             <div className="absolute inset-0 bg-gradient-to-b from-foreground/[0.02] to-transparent pointer-events-none" />
             
-            <UploadCloud className="w-12 h-12 text-muted mb-6 group-hover:text-foreground/80 transition-colors duration-500" />
-            <h2 className="text-2xl md:text-3xl font-medium tracking-tight mb-3 text-foreground">Import bracketed sets</h2>
-            <p className="text-muted text-sm md:text-base mb-8 max-w-md mx-auto leading-relaxed">
+            <UploadCloud className="w-12 h-12 text-muted mb-4 sm:mb-6 group-hover:text-foreground/80 transition-colors duration-500" />
+            <h2 className="text-2xl md:text-3xl font-medium tracking-tight mb-2 sm:mb-3 text-foreground">Import bracketed sets</h2>
+            <p className="text-muted text-sm md:text-base mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed">
               Auto-grouping powered by EXIF metadata. Drop JPEG or TIFF shoot folders here.
             </p>
             
-            <div className="relative z-10">
+            <div className="relative z-10 w-full sm:w-auto">
               <input 
                 type="file" 
                 multiple 
@@ -364,7 +364,7 @@ export default function UploadFlow() {
               />
               <label 
                 htmlFor="file-upload" 
-                className="px-8 py-3.5 bg-foreground text-background hover:opacity-90 transition-all rounded-full font-semibold cursor-pointer text-sm shadow-sm active:scale-95 block"
+                className="px-8 py-3.5 bg-foreground text-background hover:opacity-90 transition-all rounded-full font-semibold cursor-pointer text-sm shadow-sm active:scale-95 flex items-center justify-center min-h-[44px] w-full sm:w-auto"
               >
                 Browse Files
               </label>
@@ -410,11 +410,11 @@ export default function UploadFlow() {
                     <strong className="text-foreground">{photoGroups.length} Scenes</strong> detected from {uploadedFiles.length} files.
                  </p>
               </div>
-              <div className="flex gap-3">
-                 <button onClick={() => setFlowState('IDLE')} className="px-6 py-3 rounded-full border border-border hover:bg-muted/5 text-foreground transition-colors text-sm font-medium tracking-wide">
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                 <button onClick={() => setFlowState('IDLE')} className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-full border border-border hover:bg-muted/5 text-foreground transition-colors text-sm font-medium tracking-wide">
                     Cancel
                  </button>
-                 <button onClick={processUploadBatch} className="px-6 py-3 rounded-full bg-foreground text-background hover:opacity-90 transition-all font-semibold text-sm shadow-sm active:scale-95">
+                 <button onClick={processUploadBatch} className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-full bg-foreground text-background hover:opacity-90 transition-all font-semibold text-sm shadow-sm active:scale-95">
                     Generate {photoGroups.length} Final Images
                  </button>
               </div>
@@ -510,7 +510,7 @@ export default function UploadFlow() {
 
       {/* STATE: REVIEW */}
       {flowState === 'REVIEW' && (
-        <div className="w-full h-[calc(100vh-64px)] absolute top-16 left-0 overflow-hidden bg-background">
+        <div className="w-full h-[calc(100dvh-64px)] absolute top-16 left-0 overflow-hidden bg-background flex flex-col">
             <ReviewGrid 
                photos={processedPhotos} 
                onConfirm={handleFinalExport}

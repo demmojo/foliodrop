@@ -54,7 +54,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
       
       {/* REVIEW QUEUE (LEFT ON DESKTOP, TOP ON MOBILE) */}
       {reviewQueue.length > 0 && (
-        <div className="w-full md:w-1/3 lg:w-1/4 border-b md:border-b-0 md:border-r border-border p-4 md:overflow-y-auto bg-surface flex-shrink-0">
+        <div className="w-full md:w-1/3 lg:w-1/4 border-b md:border-b-0 md:border-r border-border p-4 overflow-y-auto max-h-[45dvh] md:max-h-none bg-surface flex-shrink-0">
           <h3 className="text-xs uppercase tracking-widest text-amber-500 mb-6 font-semibold">
             Needs Review ({reviewQueue.length})
           </h3>
@@ -84,7 +84,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     <span className="text-sm font-medium truncate pr-2">{photo.roomName}</span>
                     <div className="flex gap-2 flex-shrink-0">
                         {onOverrideWithManualEdit && (
-                            <label className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 hover:bg-blue-500/20 dark:hover:bg-blue-500/40 transition-colors cursor-pointer" title="Override with Manual Edit">
+                            <label className="flex items-center justify-center text-xs px-3 py-2 sm:px-2 sm:py-1 min-h-[44px] sm:min-h-0 rounded bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 hover:bg-blue-500/20 dark:hover:bg-blue-500/40 transition-colors cursor-pointer" title="Override with Manual Edit">
                                 ✏️ Override
                                 <input 
                                     type="file" 
@@ -99,12 +99,12 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                             </label>
                         )}
                         {onKeepItem && (
-                            <button onClick={() => onKeepItem(photo.id)} className="text-xs px-2 py-1 rounded bg-muted/20 hover:bg-muted/40 transition-colors" title="Dismiss Flag">
+                            <button onClick={() => onKeepItem(photo.id)} className="flex items-center justify-center text-xs px-3 py-2 sm:px-2 sm:py-1 min-h-[44px] sm:min-h-0 rounded bg-muted/20 hover:bg-muted/40 transition-colors" title="Dismiss Flag">
                                 ✓ Keep
                             </button>
                         )}
                         {onDiscardItem && (
-                            <button onClick={() => onDiscardItem(photo.id)} className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-300 hover:bg-red-500/20 dark:hover:bg-red-500/40 transition-colors" title="Discard Image">
+                            <button onClick={() => onDiscardItem(photo.id)} className="flex items-center justify-center text-xs px-3 py-2 sm:px-2 sm:py-1 min-h-[44px] sm:min-h-0 rounded bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-300 hover:bg-red-500/20 dark:hover:bg-red-500/40 transition-colors" title="Discard Image">
                                 🗑️ Drop
                             </button>
                         )}
@@ -130,7 +130,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
       )}
 
       {/* CARGO GRID (RIGHT ON DESKTOP, BOTTOM ON MOBILE) */}
-      <div className={clsx("flex-1 p-4 md:p-8 overflow-y-auto", reviewQueue.length === 0 && "w-full")}>
+      <div className={clsx("flex-1 p-4 pb-safe md:p-8 overflow-y-auto", reviewQueue.length === 0 && "w-full")}>
          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-8 gap-4">
             <div>
                 <h2 className="text-2xl font-light text-foreground tracking-tight">Ready for Export</h2>
@@ -188,7 +188,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
               </div>
               <div className="p-4 border-t border-white/10 flex justify-center gap-2 sm:gap-4 bg-[#111] pb-safe">
                  {onOverrideWithManualEdit && (
-                     <label className="px-4 sm:px-6 py-3 sm:py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none text-center cursor-pointer">
+                     <label className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none text-center cursor-pointer">
                          Override
                          <input 
                              type="file" 
@@ -206,7 +206,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                  {onKeepItem && (
                      <button 
                         onClick={() => { onKeepItem(loupeImage.id); setLoupeImage(null); }}
-                        className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
+                        className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
                      >
                          Keep
                      </button>
@@ -214,7 +214,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                  {onDiscardItem && (
                      <button 
                         onClick={() => { onDiscardItem(loupeImage.id); setLoupeImage(null); }}
-                        className="px-4 sm:px-6 py-3 sm:py-2 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
+                        className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
                      >
                          Discard
                      </button>

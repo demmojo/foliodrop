@@ -24,12 +24,16 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
     setSliderPosition(position);
   };
 
-  const handleMouseMove = (e: globalThis.MouseEvent) => handleMove(e.clientX);
-  const handleTouchMove = (e: globalThis.TouchEvent) => handleMove(e.touches[0].clientX);
-  
   const handleMouseUp = () => setIsDragging(false);
 
   useEffect(() => {
+    const handleMouseMove = (e: globalThis.MouseEvent) => handleMove(e.clientX);
+    const handleTouchMove = (e: globalThis.TouchEvent) => {
+      // prevent default to avoid vertical scroll while swiping slider
+      if (e.cancelable) e.preventDefault();
+      handleMove(e.touches[0].clientX);
+    };
+
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
@@ -48,6 +52,7 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleMouseUp);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDragging]);
 
   const startDrag = (e: ReactMouseEvent | ReactTouchEvent) => {
