@@ -149,7 +149,7 @@ The previous pipeline strictly forbade generative AI due to MLS compliance fears
 - Edge case: Gemini safety filter triggers (e.g. face in portrait) -> gracefully falls back to returning the OpenCV fused image.
 - Error path: Gemini API fails or times out -> Cloud Task retry logic triggers or raises clear domain error.
 
-- [ ] **Unit 3: Update Frontend Review Flow (Manual Default & Resiliency)**
+- [x] **Unit 3: Update Frontend Review Flow (Manual Default & Resiliency)**
 
 **Goal:** Ensure generated images land in the "Needs Review" queue by default, survive page refreshes, and handle expired secure URLs seamlessly.
 
