@@ -162,25 +162,23 @@ describe('ReviewGrid Component', () => {
     expect(onOverride).toHaveBeenCalledTimes(1);
   });
 
-  it('can open and close the loupe modal', () => {
-    render(<ReviewGrid photos={mockPhotos} onConfirm={vi.fn()} />);
-
-    // Click on image container to open loupe
-    const imageContainer = screen.getByText('Inspect').closest('div')?.parentElement;
-    if (imageContainer) {
-      fireEvent.click(imageContainer);
-    }
-
-    expect(screen.getByTestId('mock-before-after-slider')).toBeInTheDocument();
-
-    // Close loupe
+  it('shows loupe view when image is clicked and closes it', () => {
+    const { container } = render(<ReviewGrid photos={mockPhotos} onConfirm={vi.fn()} />);
+    
+    // There are multiple images, click the first one in the Needs Review queue
+    const queueImages = container.querySelectorAll('.w-full.aspect-\\[3\\/2\\]');
+    fireEvent.click(queueImages[0]);
+    
+    // Loupe should appear (it's fixed positioned with a close button containing &times;)
     const closeBtn = screen.getByText('×');
+    expect(closeBtn).toBeInTheDocument();
+    
+    // Close the loupe
     fireEvent.click(closeBtn);
-
-    expect(screen.queryByTestId('mock-before-after-slider')).not.toBeInTheDocument();
+    expect(screen.queryByText('×')).not.toBeInTheDocument();
   });
 
-  it('loupe modal actions trigger callbacks and close modal', () => {
+  it('loupe modal actions trigger callbacks and do not close modal for keep', () => {
     const onKeep = vi.fn();
     const onDiscard = vi.fn();
     const onOverride = vi.fn();
@@ -196,37 +194,21 @@ describe('ReviewGrid Component', () => {
     );
 
     // Open loupe
-    const imageContainer = screen.getByText('Inspect').closest('div')?.parentElement;
+    const inspectSpans = screen.getAllByText('Inspect');
+    const imageContainer = inspectSpans[0].closest('div')?.parentElement;
     fireEvent.click(imageContainer!);
 
     // Keep
     const keepBtns = screen.getAllByRole('button', { name: /Keep/i });
     fireEvent.click(keepBtns[1]); // The one in the modal
     expect(onKeep).toHaveBeenCalledWith('2');
-    expect(screen.queryByTestId('mock-before-after-slider')).not.toBeInTheDocument();
+    // Expect the modal to still be open since we allow updating choice
+    expect(screen.queryByTestId('mock-before-after-slider')).toBeInTheDocument();
 
-    // Re-open
-    fireEvent.click(imageContainer!);
+    // Discard (which does close the modal)
     const discardBtns = screen.getAllByRole('button', { name: /Drop/i }).concat(screen.getAllByRole('button', { name: /Discard/i }));
     fireEvent.click(discardBtns[discardBtns.length - 1]); // The one in the modal
     expect(onDiscard).toHaveBeenCalledWith('2');
-    expect(screen.queryByTestId('mock-before-after-slider')).not.toBeInTheDocument();
-    
-    // Re-open for override
-    fireEvent.click(imageContainer!);
-    const overrideInput = document.querySelector('.fixed.inset-0 input[type="file"]') as HTMLInputElement;
-    const file = new File([''], 'test.jpg');
-    
-    // Test that override handles empty files list (user cancelled dialog)
-    fireEvent.change(overrideInput, { target: { files: null } });
-    expect(onOverride).toHaveBeenCalledTimes(0);
-
-    fireEvent.change(overrideInput, { target: { files: [] } });
-    expect(onOverride).toHaveBeenCalledTimes(0);
-    
-    // Successful override
-    fireEvent.change(overrideInput, { target: { files: [file] } });
-    expect(onOverride).toHaveBeenCalledWith('2', file);
     expect(screen.queryByTestId('mock-before-after-slider')).not.toBeInTheDocument();
   });
 

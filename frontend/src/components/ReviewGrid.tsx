@@ -218,7 +218,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                  )}
                  {onKeepItem && (loupeImage.isFlagged || loupeImage.status === 'NEEDS_REVIEW') && (
                      <button 
-                        onClick={() => { onKeepItem(loupeImage.id); setLoupeImage(null); }}
+                        onClick={() => { onKeepItem(loupeImage.id); }}
                         className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
                      >
                          Keep
