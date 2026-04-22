@@ -364,29 +364,56 @@ export default function UploadFlow() {
            </div>
            
            <div className="bg-surface border border-border shadow-sm rounded-xl p-6 overflow-hidden">
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 max-h-[60vh] overflow-y-auto pr-2 pb-4 custom-scrollbar">
-                 {photoGroups.map((group, idx) => (
-                    <div key={group.id} className="flex flex-col gap-2 group">
-                       <div className="relative aspect-[3/2] rounded-lg overflow-hidden border border-border bg-black shadow-sm">
-                          {/* Stack effect */}
-                          <div className="absolute inset-0 bg-foreground/5 translate-x-1 translate-y-1 rounded-lg -z-10" />
-                          <div className="absolute inset-0 bg-foreground/5 translate-x-2 translate-y-2 rounded-lg -z-20" />
-                          
-                          <img src={group.previewUrl} alt={`Scene ${idx + 1}`} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
-                          
-                          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-mono font-medium text-white border border-white/10">
-                             {group.photos.length} brackets
-                          </div>
-                       </div>
-                       <div className="text-xs font-medium text-muted px-1">Scene {idx + 1}</div>
-                    </div>
-                 ))}
+              <div className="flex flex-col gap-8 max-h-[60vh] overflow-y-auto pr-2 pb-4 custom-scrollbar">
+                 {photoGroups.map((group, idx) => {
+                    // Sort photos from darkest to lightest
+                    // We can estimate brightness by exposureCompensation, or exposureTime
+                    const sortedPhotos = [...group.photos].sort((a, b) => {
+                        const evA = a.exposureCompensation ?? 0;
+                        const evB = b.exposureCompensation ?? 0;
+                        if (evA !== evB) return evA - evB;
+                        
+                        const timeA = a.exposureTime ?? 0;
+                        const timeB = b.exposureTime ?? 0;
+                        return timeA - timeB;
+                    });
+
+                    return (
+                        <div key={group.id} className="flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-foreground">Scene {idx + 1}</h3>
+                                <span className="text-xs text-muted bg-foreground/5 px-2 py-1 rounded">{group.photos.length} brackets</span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                                {sortedPhotos.map((photo, pIdx) => (
+                                    <div key={pIdx} className="flex flex-col gap-2">
+                                        <div className="aspect-[3/2] rounded-lg overflow-hidden border border-border bg-black shadow-sm">
+                                            <img src={photo.previewUrl} alt={`Bracket ${pIdx + 1}`} className="w-full h-full object-cover" />
+                                        </div>
+                                        <div className="flex flex-col gap-0.5 px-1">
+                                            <span className="text-xs font-medium text-foreground">
+                                                {photo.exposureCompensation !== undefined 
+                                                    ? `${photo.exposureCompensation > 0 ? '+' : ''}${photo.exposureCompensation} EV` 
+                                                    : '0 EV'}
+                                            </span>
+                                            <div className="text-[10px] text-muted flex flex-wrap gap-x-2">
+                                                {photo.exposureTime && <span>{photo.exposureTime >= 1 ? photo.exposureTime : `1/${Math.round(1 / photo.exposureTime)}`}s</span>}
+                                                {photo.fNumber && <span>f/{photo.fNumber}</span>}
+                                                {photo.iso && <span>ISO {photo.iso}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                 })}
               </div>
            </div>
            
            <div className="mt-6 flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 p-4 rounded-lg text-sm text-amber-600 dark:text-amber-500">
               <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-              <p>Please review the scene groupings above. If the algorithm grouped a bathroom with a hallway, your camera's clock or burst speed may be irregular. If so, cancel and upload them separately.</p>
+              <p>Please review the scene groupings above. If the algorithm grouped a bathroom with a hallway, your camera&apos;s clock or burst speed may be irregular. If so, cancel and upload them separately.</p>
            </div>
         </div>
       )}

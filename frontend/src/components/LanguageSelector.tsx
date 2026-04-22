@@ -17,7 +17,10 @@ export function LanguageSelector() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    // We run setMounted(true) here to ensure hydrated state matches client,
+    // avoiding hydration mismatches for local storage values
+    const timer = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(timer);
   }, []);
 
   if (!mounted) {
