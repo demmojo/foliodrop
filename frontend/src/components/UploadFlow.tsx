@@ -97,16 +97,21 @@ export default function UploadFlow() {
   }, [flowState]);
 
   const processSelectedFiles = async (allFiles: File[]) => {
-    const SUPPORTED_TYPES = ['image/jpeg', 'image/png', 'image/tiff'];
-    const files = allFiles.filter(file => SUPPORTED_TYPES.includes(file.type));
+    const SUPPORTED_TYPES = ['image/jpeg', 'image/png', 'image/tiff', 'image/heic', 'image/heif'];
+    const files = allFiles.filter(file => {
+      if (SUPPORTED_TYPES.includes(file.type)) return true;
+      // Fallback for browsers that don't correctly report HEIC MIME type
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      return ext === 'heic' || ext === 'heif';
+    });
     
     if (files.length === 0) {
-        if (allFiles.length > 0) showToast("Only JPEG, PNG, and TIFF formats are supported. Please convert RAW files.");
+        if (allFiles.length > 0) showToast("Only JPEG, PNG, HEIC, and TIFF formats are supported. Please convert RAW files.");
         return;
     }
 
     if (files.length !== allFiles.length) {
-      showToast(`Ignored ${allFiles.length - files.length} unsupported files. Only JPEG/PNG/TIFF allowed.`);
+      showToast(`Ignored ${allFiles.length - files.length} unsupported files.`);
     }
     
     setFlowState('PARSING');
@@ -261,16 +266,12 @@ export default function UploadFlow() {
           return;
       }
 
-      showToast(`Preparing ${exportCount} images for download (ZIP)...`);
+      showToast(`Preparing ${exportCount} images for export...`);
       
       try {
-          const zip = new JSZip();
-          const folder = zip.folder("folio-export");
-          
-          if (!folder) throw new Error("Failed to create ZIP folder");
-
-          // Fetch all images and add to ZIP
+          // Fetch all images
           const limit = pLimit(3); // Download max 3 in parallel
+          const downloadedFiles: File[] = [];
           
           await Promise.all(readyPhotos.map(photo => limit(async () => {
               const url = photo.url;
@@ -279,30 +280,72 @@ export default function UploadFlow() {
               try {
                   const response = await fetch(url);
                   const blob = await response.blob();
+                  
                   // determine extension from blob type or default to jpg
                   let ext = 'jpg';
                   if (blob.type === 'image/png') ext = 'png';
                   else if (blob.type === 'image/tiff') ext = 'tiff';
+                  else if (blob.type === 'image/webp') ext = 'webp';
                   
                   // fallback to original name if available or generated room name
                   let filename = photo.roomName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                   if (!filename) filename = `scene_${photo.id}`;
                   
                   // Ensure uniqueness by appending short id
-                  filename = `${filename}_${photo.id.substring(0,6)}`;
+                  filename = `${filename}_${photo.id.substring(0,6)}.${ext}`;
                   
-                  folder.file(`${filename}.${ext}`, blob);
+                  const file = new File([blob], filename, { type: blob.type });
+                  downloadedFiles.push(file);
               } catch (err) {
                   console.error(`Failed to download ${url}:`, err);
               }
           })));
+          
+          if (downloadedFiles.length === 0) {
+              throw new Error("No files were successfully downloaded.");
+          }
+
+          // Try native Web Share API first (best for iOS/Android camera roll saving)
+          if (navigator.share && navigator.canShare) {
+              const shareData = {
+                  files: downloadedFiles,
+                  title: 'Folio Export'
+              };
+              
+              if (navigator.canShare(shareData)) {
+                  try {
+                      await navigator.share(shareData);
+                      showToast("Export successful!");
+                      return; // Exit early if share succeeds
+                  } catch (err: unknown) {
+                      // If user aborted the share sheet, do not fallback to ZIP. Just exit.
+                      const error = err as Error;
+                      if (error.name === 'AbortError' || (error.message && error.message.toLowerCase().includes('abort'))) {
+                          return;
+                      }
+                      console.error("Native share failed, falling back to ZIP:", err);
+                      // Fall through to ZIP
+                  }
+              }
+          }
+          
+          // Fallback to ZIP
+          showToast("Zipping images for download...");
+          const zip = new JSZip();
+          const folder = zip.folder("folio-export");
+          
+          if (!folder) throw new Error("Failed to create ZIP folder");
+
+          for (const file of downloadedFiles) {
+              folder.file(file.name, file);
+          }
           
           const content = await zip.generateAsync({ type: "blob" });
           saveAs(content, `folio_export_${new Date().getTime()}.zip`);
           showToast("Download complete!");
       } catch (err) {
           console.error("Export failed", err);
-          showToast("Failed to create ZIP archive.");
+          showToast("Failed to export images.");
       }
   };
 
@@ -350,14 +393,14 @@ export default function UploadFlow() {
             <UploadCloud className="w-12 h-12 text-muted mb-4 sm:mb-6 group-hover:text-foreground/80 transition-colors duration-500" />
             <h2 className="text-2xl md:text-3xl font-medium tracking-tight mb-2 sm:mb-3 text-foreground">Import bracketed sets</h2>
             <p className="text-muted text-sm md:text-base mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed">
-              Auto-grouping powered by EXIF metadata. Drop JPEG or TIFF shoot folders here.
+              Select multiple photos from your camera roll or drop folders here. We support JPEG, HEIC, TIFF, and PNG.
             </p>
             
             <div className="relative z-10 w-full sm:w-auto">
               <input 
                 type="file" 
                 multiple 
-                accept="image/jpeg, image/png, image/tiff" 
+                accept="image/*, .heic, .heif" 
                 id="file-upload" 
                 className="hidden" 
                 onChange={handleFileInput} 
@@ -366,7 +409,7 @@ export default function UploadFlow() {
                 htmlFor="file-upload" 
                 className="px-8 py-3.5 bg-foreground text-background hover:opacity-90 transition-all rounded-full font-semibold cursor-pointer text-sm shadow-sm active:scale-95 flex items-center justify-center min-h-[44px] w-full sm:w-auto"
               >
-                Browse Files
+                Select Photos
               </label>
             </div>
           </div>

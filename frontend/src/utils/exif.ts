@@ -1,4 +1,5 @@
 import exifr from 'exifr';
+import pLimit from 'p-limit';
 
 export interface PhotoMeta {
   file: File;
@@ -17,7 +18,9 @@ export interface PhotoGroup {
 }
 
 export async function parsePhotoMetadata(files: File[]): Promise<PhotoMeta[]> {
-  const metaPromises = files.map(async (file) => {
+  const limit = pLimit(5); // Limit concurrency for mobile memory constraints
+
+  const metaPromises = files.map(file => limit(async () => {
     let captureTime = file.lastModified;
     let exposureCompensation: number | undefined;
     let exposureTime: number | undefined;
@@ -49,7 +52,7 @@ export async function parsePhotoMetadata(files: File[]): Promise<PhotoMeta[]> {
       fNumber,
       iso,
     };
-  });
+  }));
 
   return Promise.all(metaPromises);
 }
