@@ -134,9 +134,10 @@ class ProcessHdrGroupUseCase:
             _, encoded_base = cv2.imencode('.jpg', final_bgr_8bit, [cv2.IMWRITE_JPEG_QUALITY, 90])
             fused_base_bytes = encoded_base.tobytes()
             
-            # We will use the middle bracket as the "original" before comparison
-            mid_idx = len(downsampled_images) // 2
-            _, encoded_orig = cv2.imencode('.jpg', downsampled_images[mid_idx], [cv2.IMWRITE_JPEG_QUALITY, 90])
+            # We will use the middle bracket (median brightness) as the "original" before comparison
+            brightness_sorted = sorted(downsampled_images, key=lambda x: x.mean())
+            mid_idx = len(brightness_sorted) // 2
+            _, encoded_orig = cv2.imencode('.jpg', brightness_sorted[mid_idx], [cv2.IMWRITE_JPEG_QUALITY, 90])
             original_bytes = encoded_orig.tobytes()
             
             # Encode all brackets to bytes for Gemini

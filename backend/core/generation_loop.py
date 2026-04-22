@@ -4,6 +4,28 @@ import asyncio
 import numpy as np
 import cv2
 import gc
+
+# region agent log
+import json
+import time
+
+def _log_debug(loc, msg, data, hyp_id):
+    try:
+        payload = {
+            "sessionId": "21d841",
+            "runId": "debug-run-1",
+            "hypothesisId": hyp_id,
+            "location": loc,
+            "message": msg,
+            "data": data,
+            "timestamp": int(time.time() * 1000)
+        }
+        with open("/home/demmojo/real-estate-hdr/.cursor/debug-21d841.log", "a") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# endregion
+
 from typing import Tuple, List
 from pydantic import BaseModel
 from google import genai
@@ -44,6 +66,7 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     kp2, des2 = sift.detectAndCompute(gen_gray, None)
     
     if des1 is None or des2 is None or len(des1) < 10 or len(des2) < 10:
+        _log_debug("generation_loop.py:47", "SIFT keypoints missing or insufficient", {"len_des1": len(des1) if des1 is not None else 0, "len_des2": len(des2) if des2 is not None else 0}, "H1")
         return False, 0.0, 1.0
         
     # Match features (FLANN)
@@ -63,6 +86,7 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
             good_matches.append(m)
             
     if len(good_matches) < 10:
+        _log_debug("generation_loop.py:66", "Insufficient good matches", {"len_good_matches": len(good_matches)}, "H2")
         return False, 0.0, 1.0
         
     src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
@@ -71,6 +95,7 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     # Homography via MAGSAC++
     M, mask = cv2.findHomography(src_pts, dst_pts, cv2.USAC_MAGSAC, 5.0)
     if M is None or mask is None:
+        _log_debug("generation_loop.py:74", "Homography matrix or mask is None", {"M_is_none": M is None, "mask_is_none": mask is None}, "H3")
         return False, 0.0, 1.0
         
     inliers = mask.ravel().tolist()
@@ -79,6 +104,7 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     
     if inlier_ratio < 0.15:
         # Fails basic drift threshold
+        _log_debug("generation_loop.py:82", "Inlier ratio too low", {"inlier_ratio": inlier_ratio, "inlier_count": inlier_count, "total_matches": len(good_matches)}, "H4")
         return False, inlier_ratio, 1.0
         
     # Check Spatial Inlier Void Pattern
@@ -99,12 +125,14 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     # Find largest contiguous void of inliers
     # A simple proxy: what percentage of the grid cells have 0 inliers?
     empty_cells = np.sum(density == 0)
-    void_ratio = empty_cells / (grid_size * grid_size)
+    void_ratio = float(empty_cells) / (grid_size * grid_size)
     
     # If more than 40% of the image is completely devoid of matching features, we likely have a massive hallucinated occlusion
     if void_ratio > 0.40:
+        _log_debug("generation_loop.py:106", "Void ratio too high", {"void_ratio": void_ratio, "empty_cells": int(empty_cells)}, "H5")
         return False, inlier_ratio, void_ratio
         
+    _log_debug("generation_loop.py:109", "Passed QA", {"inlier_ratio": inlier_ratio, "void_ratio": void_ratio}, "H_OK")
     return True, inlier_ratio, void_ratio
 
 async def generate_hybrid_hdr(
