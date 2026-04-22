@@ -19,7 +19,7 @@ class FinalizeJobUseCase:
         self.task_queue = task_queue
         self.db = db
 
-    def execute(self, session_id: str, idempotency_key: str, files_data: Optional[List[dict]] = None, groups_data: Optional[List[dict]] = None) -> dict:
+    def execute(self, agency_id: str, session_id: str, idempotency_key: str, files_data: Optional[List[dict]] = None, groups_data: Optional[List[dict]] = None) -> dict:
         import datetime
         import uuid
         
@@ -52,6 +52,13 @@ class FinalizeJobUseCase:
                 
         elif files_data:
             from backend.core.grouping import group_photos, Photo, ExifData
+            # #region agent log
+            import json, time
+            try:
+                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
+                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_GROUPS","location":"FinalizeJobUseCase:execute:fallback","message":"using fallback files_data","data":{},"timestamp":int(time.time()*1000)}) + "\n")
+            except Exception: pass
+            # #endregion
             photos = []
             for file in files_data:
                 dt = datetime.datetime.fromtimestamp(file["timestamp"] / 1000.0, tz=datetime.timezone.utc)
@@ -73,20 +80,22 @@ class FinalizeJobUseCase:
                 new_jobs.append((group_job_id, group_idemp_key, room_name, filenames))
                 
         if new_jobs:
-            if not self.db.increment_quota_usage("default", len(new_jobs)):
+            if not self.db.increment_quota_usage(agency_id, len(new_jobs)):
                 return {"status": "quota_exceeded", "message": "Monthly quota limit of 3000 HDR generations reached."}
 
             for group_job_id, group_idemp_key, room_name, filenames in new_jobs:
                 self.db.save_job(group_job_id, session_id, "PENDING", group_idemp_key)
-                self.task_queue.enqueue_job(group_job_id, session_id, room_name, filenames)
+                self.task_queue.enqueue_job(group_job_id, session_id, room_name, filenames, agency_id)
                 job_ids.append(group_job_id)
             
         return {"status": "enqueued", "job_ids": job_ids, "tasks_count": len(new_jobs)}
 
 def downsample_for_vlm(image_bytes: bytes, max_dim: int = 1080) -> bytes:
     import cv2
-    img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
-    if img is None:
+    from backend.core.image_decoding import decode_image
+    try:
+        img = decode_image(image_bytes)
+    except ValueError:
         return image_bytes
     h, w = img.shape[:2]
     if max(h, w) > max_dim:
@@ -102,7 +111,7 @@ class ProcessHdrGroupUseCase:
         self.storage = storage
         self.db = db
 
-    async def execute(self, job_id: str, session_id: str, room: str, photos: Optional[List[Any]] = None) -> dict:
+    async def execute(self, agency_id: str, job_id: str, session_id: str, room: str, photos: Optional[List[Any]] = None) -> dict:
         if not photos or len(photos) < 2:
              error_msg = "Need at least 2 photos for HDR"
              job = self.db.get_job(job_id)
@@ -122,8 +131,8 @@ class ProcessHdrGroupUseCase:
             
             await self.event_publisher.publish_progress(session_id, room, "PROCESSING")
             
-            # Decode bytes to numpy arrays
-            np_images = [cv2.imdecode(np.frombuffer(b, np.uint8), cv2.IMREAD_COLOR) for b in raw_bytes_list]
+            from backend.core.image_decoding import decode_image
+            np_images = [decode_image(b) for b in raw_bytes_list]
             
             # Downsample brackets to 2048px max dimension BEFORE merge to prevent OOM
             downsampled_images = []
@@ -158,6 +167,14 @@ class ProcessHdrGroupUseCase:
             fused_base_bytes = encoded_base.tobytes()
             
             # We will use the middle bracket (median brightness) as the "original" before comparison
+            # #region agent log
+            import json, time
+            try:
+                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
+                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_PROCESS","location":"ProcessHdrGroupUseCase:execute","message":"received photos in worker","data":{"job_id":job_id,"room":room,"photos":photos,"len_downsampled":len(downsampled_images)},"timestamp":int(time.time()*1000)}) + "\n")
+            except Exception: pass
+            # #endregion
+            
             brightness_sorted = sorted(downsampled_images, key=lambda x: x.mean())
             mid_idx = len(brightness_sorted) // 2
             _, encoded_orig = cv2.imencode('.jpg', brightness_sorted[mid_idx], [cv2.IMWRITE_JPEG_QUALITY, 90])
@@ -187,20 +204,37 @@ class ProcessHdrGroupUseCase:
             if api_key != "dummy-key":
                 client = genai.Client(api_key=api_key)
                 
-                # Fetch style images
-                style_paths = self.db.get_style_images("default")
-                style_urls = [self.storage.generate_signed_url(p) for p in style_paths]
+                # Fetch context for Nano Banana Pro (Dynamic Few-Shot RAG)
+                training_pairs = []
+                style_urls = []
+                
+                recent_pairs = self.db.get_recent_training_pairs(agency_id, limit=2)
+                if recent_pairs:
+                    for pair in recent_pairs:
+                        bracket_urls = [self.storage.generate_signed_url(p) for p in pair.get("bracket_paths", []) if p]
+                        final_url = self.storage.generate_signed_url(pair.get("final_path", "")) if pair.get("final_path") else ""
+                        if bracket_urls and final_url:
+                            training_pairs.append({
+                                "bracket_urls": bracket_urls,
+                                "final_url": final_url
+                            })
+                
+                # Graceful degradation to style images if no valid training pairs
+                if not training_pairs:
+                    style_paths = self.db.get_style_images(agency_id, limit=2)
+                    style_urls = [self.storage.generate_signed_url(p) for p in style_paths]
                 
                 max_retries = 3
                 for attempt in range(max_retries + 1):
                     try:
                         gen_img_bytes, gen_info = await generate_hybrid_hdr(
-                            client, fused_base_bytes, bracket_bytes_list, retry_count=attempt, style_urls=style_urls
+                            client, fused_base_bytes, bracket_bytes_list, retry_count=attempt, style_urls=style_urls, training_pairs=training_pairs
                         )
                         
                         # Structural QA
-                        gen_cv_img = cv2.imdecode(np.frombuffer(gen_img_bytes, np.uint8), cv2.IMREAD_COLOR)
-                        base_cv_img = cv2.imdecode(np.frombuffer(fused_base_bytes, np.uint8), cv2.IMREAD_COLOR)
+                        from backend.core.image_decoding import decode_image
+                        gen_cv_img = decode_image(gen_img_bytes)
+                        base_cv_img = decode_image(fused_base_bytes)
                         
                         is_valid, inlier_ratio, void_ratio = compute_structural_diff(base_cv_img, gen_cv_img)
                         telemetry.append({
@@ -243,7 +277,8 @@ class ProcessHdrGroupUseCase:
                 telemetry.append({"mock": "used dummy-key"})
             
             # Decode final chosen image bytes to create thumbnail
-            final_bgr_8bit = cv2.imdecode(np.frombuffer(final_image_bytes, np.uint8), cv2.IMREAD_COLOR)
+            from backend.core.image_decoding import decode_image
+            final_bgr_8bit = decode_image(final_image_bytes)
             
             # Generate WebP thumbnail
             h, w = final_bgr_8bit.shape[:2]
@@ -275,6 +310,7 @@ class ProcessHdrGroupUseCase:
                 "blob_path": final_path,
                 "thumb_blob_path": thumb_path,
                 "original_blob_path": original_path,
+                "bracket_paths": [f"{session_id}/{p}" for p in photos], # save bracket paths for training
                 "isFlagged": is_flagged,
                 "vlmReport": report_data,
                 "telemetry": telemetry
@@ -348,6 +384,9 @@ class OverrideJobImageUseCase:
         if not job:
             return {"status": "error", "message": "Job not found"}
             
+        if "result" not in job:
+            return {"status": "error", "message": "Job had no result to override"}
+            
         import uuid
         import re
         batch_id = uuid.uuid4().hex[:8]
@@ -358,36 +397,37 @@ class OverrideJobImageUseCase:
         
         self.storage.upload_blob_direct(final_blob_path, final_data, final_content_type)
         
-        bracket_paths = [] 
+        # We don't have the original bracket paths here, so we store an empty list or try to fetch from job?
+        # Actually, job might have original bracket paths if we saved them in job.
+        # But we'll just save empty for now as in the original code.
+        bracket_paths = job["result"].get("bracket_paths", []) 
         self.db.save_training_pair(agency_id, bracket_paths, final_blob_path)
         
-        if "result" in job:
-            job["result"]["blob_path"] = final_blob_path
-            try:
-                import cv2
-                import numpy as np
-                final_bgr = cv2.imdecode(np.frombuffer(final_data, np.uint8), cv2.IMREAD_COLOR)
-                h, w = final_bgr.shape[:2]
-                thumb_scale = 800 / max(h, w)
-                thumb_img = cv2.resize(final_bgr, (int(w * thumb_scale), int(h * thumb_scale)), interpolation=cv2.INTER_AREA)
-                _, encoded_thumb = cv2.imencode('.webp', thumb_img, [cv2.IMWRITE_WEBP_QUALITY, 80])
-                thumb_bytes = encoded_thumb.tobytes()
-                
-                thumb_blob_path = f"training_pairs/{agency_id}/{batch_id}/thumb_override_{sanitized_final}.webp"
-                self.storage.upload_blob_direct(thumb_blob_path, thumb_bytes, "image/webp")
-                job["result"]["thumb_blob_path"] = thumb_blob_path
-            except Exception:
-                pass
-                
-            self.db.save_job(job_id, job["session_id"], job["status"], job["idempotency_key"], result=job["result"])
+        job["result"]["blob_path"] = final_blob_path
+        try:
+            import cv2
+            import numpy as np
+            from backend.core.image_decoding import decode_image
+            final_bgr = decode_image(final_data)
+            h, w = final_bgr.shape[:2]
+            thumb_scale = 800 / max(h, w)
+            thumb_img = cv2.resize(final_bgr, (int(w * thumb_scale), int(h * thumb_scale)), interpolation=cv2.INTER_AREA)
+            _, encoded_thumb = cv2.imencode('.webp', thumb_img, [cv2.IMWRITE_WEBP_QUALITY, 80])
+            thumb_bytes = encoded_thumb.tobytes()
             
-            return {
-                "status": "success", 
-                "blob_path": final_blob_path, 
-                "thumb_blob_path": job["result"].get("thumb_blob_path"),
-                "url": self.storage.generate_signed_url(final_blob_path),
-                "thumb_url": self.storage.generate_signed_url(job["result"].get("thumb_blob_path")) if job["result"].get("thumb_blob_path") else None
-            }
+            thumb_blob_path = f"training_pairs/{agency_id}/{batch_id}/thumb_override_{sanitized_final}.webp"
+            self.storage.upload_blob_direct(thumb_blob_path, thumb_bytes, "image/webp")
+            job["result"]["thumb_blob_path"] = thumb_blob_path
+        except Exception:
+            pass
+            
+        self.db.save_job(job_id, job["session_id"], job["status"], job["idempotency_key"], result=job["result"])
         
-        return {"status": "error", "message": "Job had no result"}
+        return {
+            "status": "success", 
+            "blob_path": final_blob_path, 
+            "thumb_blob_path": job["result"].get("thumb_blob_path"),
+            "url": self.storage.generate_signed_url(final_blob_path),
+            "thumb_url": self.storage.generate_signed_url(job["result"].get("thumb_blob_path")) if job["result"].get("thumb_blob_path") else None
+        }
 

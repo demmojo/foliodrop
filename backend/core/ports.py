@@ -16,8 +16,11 @@ class IDatabase(Protocol):
     def get_agency_quota(self, agency_id: str) -> dict: ... # pragma: no cover
     def increment_quota_usage(self, agency_id: str, amount: int) -> bool: ... # pragma: no cover
     def save_style_image(self, agency_id: str, blob_path: str) -> List[str]: ... # pragma: no cover
-    def get_style_images(self, agency_id: str) -> List[str]: ... # pragma: no cover
+    def get_style_images(self, agency_id: str, limit: int = 2) -> List[str]: ... # pragma: no cover
+    def get_style_profiles(self, agency_id: str) -> List[dict]: ... # pragma: no cover
+    def delete_style_profile(self, agency_id: str, profile_id: str) -> Optional[str]: ... # pragma: no cover
     def save_training_pair(self, agency_id: str, bracket_paths: List[str], final_path: str) -> None: ... # pragma: no cover
+    def get_recent_training_pairs(self, agency_id: str, limit: int = 2) -> List[dict]: ... # pragma: no cover
     
     def check_session_code_availability(self, code: str) -> bool: ... # pragma: no cover
     def reserve_session_code(self, code: str) -> bool: ... # pragma: no cover
@@ -33,7 +36,7 @@ class IBlobStorage(Protocol):
 
 class ITaskQueue(Protocol):
     def enqueue_room_processing(self, session_id: str, room_name: str, photos: List[str]): ... # pragma: no cover
-    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str]): ... # pragma: no cover
+    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str], agency_id: str = "default"): ... # pragma: no cover
 
 class IEventPublisher(Protocol):
     async def publish_progress(self, session_id: str, room: str, status: str, progress: Optional[int] = None): ... # pragma: no cover

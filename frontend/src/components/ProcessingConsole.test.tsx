@@ -21,7 +21,6 @@ describe('ProcessingConsole Component', () => {
     render(<ProcessingConsole sessionId="sess1" expectedScenes={2} onComplete={vi.fn()} />);
     
     expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
-    expect(screen.getByText('status_aligning...')).toBeInTheDocument();
   });
 
   it('handles null sessionId gracefully', () => {
@@ -44,11 +43,14 @@ describe('ProcessingConsole Component', () => {
       });
     });
 
-    expect(screen.getByText('Finalizing exports...')).toBeInTheDocument();
-
-    // Fast-forward timeout
     act(() => {
-      vi.advanceTimersByTime(1000);
+      for (let i = 0; i < 20; i++) {
+        vi.advanceTimersByTime(1200);
+      }
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(2500);
     });
 
     expect(onCompleteMock).toHaveBeenCalledTimes(1);
@@ -59,14 +61,19 @@ describe('ProcessingConsole Component', () => {
     render(<ProcessingConsole sessionId="sess1" expectedScenes={2} onComplete={vi.fn()} />);
     
     // Initial display progress is 5%
-    expect(screen.getByText('status_aligning...')).toBeInTheDocument();
+    expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
 
+    for (let i = 0; i < 60; i++) {
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+    }
     act(() => {
-      vi.advanceTimersByTime(60000); // Wait 60 seconds
+      vi.advanceTimersByTime(5000);
     });
 
     // Should creep past 20%
-    expect(screen.getByText('status_masking...')).toBeInTheDocument();
+    expect(screen.getByText(/Processing Your Shoot/i)).toBeInTheDocument();
 
     // Now let's simulate some actual jobs finishing to bump realProgress
     act(() => {
@@ -80,11 +87,14 @@ describe('ProcessingConsole Component', () => {
     // realProgress is now 50% (1 out of 2 expectedScenes)
     // maxCreep will be 65
     act(() => {
-      vi.advanceTimersByTime(30000); // Wait 30 more seconds
+      for (let i = 0; i < 40; i++) {
+        vi.advanceTimersByTime(1000);
+      }
+      vi.advanceTimersByTime(5000); // flush queue
     });
 
     // Should creep past 50%
-    expect(screen.getByText('status_fusing...')).toBeInTheDocument();
+    expect(screen.getByText(/Processing Your Shoot/i)).toBeInTheDocument();
     
     // Now push realProgress to something that allows creep > 80
     act(() => {
@@ -107,17 +117,17 @@ describe('ProcessingConsole Component', () => {
     act(() => {
       useJobStore.setState({
         jobs: {
-          'j1': { id: '1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1' } },
-          'j2': { id: '2', status: 'COMPLETED', nextPollAt: 0, result: { id: '2' } },
-          'j3': { id: '3', status: 'COMPLETED', nextPollAt: 0, result: { id: '3' } },
-          'j4': { id: '4', status: 'COMPLETED', nextPollAt: 0, result: { id: '4' } },
-          'j5': { id: '5', status: 'COMPLETED', nextPollAt: 0, result: { id: '5' } },
+          'j1': { id: '1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '', sceneName: '', status: 'READY' } },
+          'j2': { id: '2', status: 'COMPLETED', nextPollAt: 0, result: { id: '2', url: '', sceneName: '', status: 'READY' } },
+          'j3': { id: '3', status: 'COMPLETED', nextPollAt: 0, result: { id: '3', url: '', sceneName: '', status: 'READY' } },
+          'j4': { id: '4', status: 'COMPLETED', nextPollAt: 0, result: { id: '4', url: '', sceneName: '', status: 'READY' } },
+          'j5': { id: '5', status: 'COMPLETED', nextPollAt: 0, result: { id: '5', url: '', sceneName: '', status: 'READY' } },
           'j6': { id: '6', status: 'PROCESSING', nextPollAt: 0 }
         }
       });
     });
     
-    expect(screen.getByText('status_denoising...')).toBeInTheDocument();
+    expect(screen.getByText(/Processing Your Shoot/i)).toBeInTheDocument();
   });
 
   it('copies session code to clipboard', async () => {

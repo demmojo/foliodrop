@@ -20,12 +20,12 @@ def test_finalize_job():
         {"name": "img2.jpg", "timestamp": 1000},
     ]
     # new idempotency key
-    result = use_case.execute("test-session", "test-idem", files_data)
+    result = use_case.execute("fake-agency", "test-session", "test-idem", files_data)
     assert result["status"] == "enqueued"
     assert len(result["job_ids"]) == 1
     
     # duplicate idempotency key
-    result2 = use_case.execute("test-session", "test-idem", files_data)
+    result2 = use_case.execute("fake-agency", "test-session", "test-idem", files_data)
     assert result2["status"] == "enqueued"
     assert result2["job_ids"] == result["job_ids"]
 
@@ -78,7 +78,7 @@ async def test_hdr_pipeline_execution():
     photos = ["img1.jpg", "img2.jpg", "img3.jpg"]
     
     # Act
-    result = await use_case.execute(job_id, session_id, room, photos)
+    result = await use_case.execute("fake-agency", job_id, session_id, room, photos)
     
     # Assert
     assert result["status"] in ["COMPLETED", "FLAGGED"]
@@ -102,7 +102,7 @@ async def test_process_hdr_missing_photos():
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
     
     # Pass 1 photo
-    result = await use_case.execute(job_id, "session", "Room", ["img1.jpg"])
+    result = await use_case.execute("fake-agency", job_id, "session", "Room", ["img1.jpg"])
     assert result["status"] == "error"
     
     # Check DB
@@ -130,7 +130,7 @@ async def test_process_hdr_exception():
     
     # Provide enough photos to trigger pipeline
     photos = ["img1.jpg", "img2.jpg", "img3.jpg"]
-    result = await use_case.execute(job_id, "session", "Room", photos)
+    result = await use_case.execute("fake-agency", job_id, "session", "Room", photos)
     assert result["status"] == "error"
     
     job = db.get_job(job_id)

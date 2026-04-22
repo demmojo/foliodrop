@@ -14,6 +14,16 @@ vi.mock('../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k })
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  })
+}));
+
+vi.mock('../components/AuthProvider', () => ({
+  useAuth: () => ({ user: { email: "test@example.com" }, loading: false })
+}));
+
 describe('Page', () => {
   it('renders page components', () => {
     const { getByTestId, getByText } = render(<Page />);

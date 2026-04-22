@@ -74,8 +74,18 @@ describe('useJobStore', () => {
     });
 
     it('uploadStyleProfile should succeed', async () => {
-      mockFetch.mockImplementationOnce((url) => {
+      mockFetch.mockImplementation((url) => {
         if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
+        if (typeof url === 'string' && url.includes('/api/v1/style/profiles')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              profiles: [
+                { id: '1', blob_path: '123_test.jpg', url: 'blob:url', created_at: 1000 }
+              ]
+            })
+          });
+        }
         return Promise.resolve({
           ok: true,
           clone: () => ({ json: () => Promise.resolve({}) })

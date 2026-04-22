@@ -1,15 +1,35 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import UploadFlow from '@/components/UploadFlow';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import AgencySettings from '@/components/AgencySettings';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useAuth } from '@/components/AuthProvider';
+import { useRouter } from 'next/navigation';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 
 export default function Home() {
   const { t } = useTranslation();
   const [showSettings, setShowSettings] = useState(false);
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  if (loading || !user) {
+    return <div className="min-h-screen flex items-center justify-center bg-background"><span className="animate-pulse">Loading...</span></div>;
+  }
+
+  const handleLogout = () => {
+    if (auth) signOut(auth);
+  };
 
   return (
     <main className="min-h-screen bg-background font-sans text-foreground selection:bg-accent selection:text-white flex flex-col transition-colors duration-300">
@@ -20,11 +40,18 @@ export default function Home() {
           <span className="font-mono text-[9px] md:text-[10px] uppercase tracking-widest px-1.5 py-0.5 bg-foreground text-background rounded-sm">{t('beta')}</span>
         </div>
         <div className="flex items-center gap-3 md:gap-6 relative z-40">
+          <span className="text-xs text-muted-foreground mr-2">{user.email}</span>
           <button 
             onClick={() => setShowSettings(!showSettings)}
             className="text-sm font-medium hover:text-accent transition-colors"
           >
             {showSettings ? 'Close Settings' : 'Settings'}
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="text-sm font-medium hover:text-red-500 transition-colors"
+          >
+            Logout
           </button>
           <LanguageSelector />
           <ThemeToggle />

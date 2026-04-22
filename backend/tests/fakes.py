@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, AsyncGenerator
+from typing import List, AsyncGenerator, Optional
 from backend.core.ports import IDatabase, IBlobStorage, ITaskQueue, IEventPublisher, IProgressSubscriber
 
 class FakeDatabase(IDatabase):
@@ -61,39 +61,75 @@ class FakeDatabase(IDatabase):
         if not hasattr(self, 'style_images'):
             self.style_images = {}
         images = self.style_images.setdefault(agency_id, [])
-        images.append(blob_path)
-        deleted = []
-        if len(images) > 3:
-            deleted.extend(images[:-3])
-            self.style_images[agency_id] = images[-3:]
-        return deleted
+        import uuid, time
+        profile_id = uuid.uuid4().hex
+        images.append({"id": profile_id, "blob_path": blob_path, "created_at": time.time() * 1000})
+        return []
 
-    def get_style_images(self, agency_id: str) -> List[str]:
+    def get_style_images(self, agency_id: str, limit: int = 2) -> List[str]:
+        if not hasattr(self, 'style_images'):
+            return []
+        images = sorted(self.style_images.get(agency_id, []), key=lambda x: x["created_at"], reverse=True)
+        return [img["blob_path"] for img in images][:limit]
+
+    def get_style_profiles(self, agency_id: str) -> List[dict]:
         if not hasattr(self, 'style_images'):
             return []
         return self.style_images.get(agency_id, [])
+
+    def delete_style_profile(self, agency_id: str, profile_id: str) -> Optional[str]:
+        if not hasattr(self, 'style_images'):
+            return None
+        images = self.style_images.get(agency_id, [])
+        for i, img in enumerate(images):
+            if img["id"] == profile_id:
+                blob_path = img["blob_path"]
+                del images[i]
+                return blob_path
+        return None
 
     def save_training_pair(self, agency_id: str, bracket_paths: List[str], final_path: str) -> None:
         if not hasattr(self, 'training_pairs'):
             self.training_pairs = {}
         pairs = self.training_pairs.setdefault(agency_id, [])
-        pairs.append({"brackets": bracket_paths, "final": final_path})
+        import time
+        pairs.append({"bracket_paths": bracket_paths, "final_path": final_path, "created_at": time.time()})
+
+    def get_recent_training_pairs(self, agency_id: str, limit: int = 2) -> List[dict]:
+        if not hasattr(self, 'training_pairs'):
+            return []
+        pairs = sorted(self.training_pairs.get(agency_id, []), key=lambda x: x["created_at"], reverse=True)
+        return pairs[:limit]
 
     def check_session_code_availability(self, code: str) -> bool:
         if code in self.sessions:
+            active_jobs = [j for j in self.jobs.values() if j.get("session_id") == code and j.get("status") in ["PENDING", "PROCESSING"]]
+            if active_jobs:
+                return False
+                
             created_at = self.sessions[code].get("created_at")
             if created_at:
                 from datetime import datetime, timezone, timedelta
-                if datetime.now(timezone.utc) - created_at < timedelta(days=90):
+                if datetime.now(timezone.utc) - created_at < timedelta(hours=24):
                     return False
         return True
 
     def reserve_session_code(self, code: str) -> bool:
         from datetime import datetime, timezone
-        if code not in self.sessions:
-            self.sessions[code] = {}
-        self.sessions[code]["created_at"] = datetime.now(timezone.utc)
-        self.sessions[code]["reserved"] = True
+        
+        # Cleanup old jobs
+        jobs_to_delete = [jid for jid, j in self.jobs.items() if j.get("session_id") == code]
+        for jid in jobs_to_delete:
+            del self.jobs[jid]
+            
+        # Cleanup old results
+        if hasattr(self, 'results') and code in self.results:
+            del self.results[code]
+            
+        self.sessions[code] = {
+            "created_at": datetime.now(timezone.utc),
+            "reserved": True
+        }
         return True
 
 class FakeBlobStorage(IBlobStorage):
@@ -120,8 +156,44 @@ class FakeBlobStorage(IBlobStorage):
 class FakeTaskQueue(ITaskQueue):
     def enqueue_room_processing(self, session_id: str, room_name: str, photos: List[str]):
         pass
-    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str]):
-        pass
+    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str], agency_id: str = "default"):
+        # #region agent log
+        import json, time
+        try:
+            with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
+                f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_ENQUEUE","location":"FakeTaskQueue:enqueue_job","message":"enqueue job called","data":{"job_id":job_id,"room":room_name,"photos":photos,"agency_id":agency_id},"timestamp":int(time.time()*1000)}) + "\n")
+        except Exception: pass
+        # #endregion
+        
+        # In a real system, this would push to Cloud Tasks. For local development/testing,
+        # we can simulate the Cloud Task hitting our own webhook synchronously (or async task)
+        import asyncio
+        async def simulate_webhook():
+            from backend.main import process_job_task, CloudTaskPayload
+            from backend.main import get_database, get_blob_storage, get_event_publisher
+            payload = CloudTaskPayload(job_id=job_id, session_id=session_id, room_name=room_name, photos=photos, agency_id=agency_id)
+            
+            # #region agent log
+            try:
+                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
+                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_ENQUEUE","location":"FakeTaskQueue:simulate_webhook","message":"invoking process_job_task","data":{"payload":payload.dict()},"timestamp":int(time.time()*1000)}) + "\n")
+            except Exception: pass
+            # #endregion
+            
+            await process_job_task(
+                payload=payload,
+                event_publisher=get_event_publisher(),
+                task_queue=self,
+                storage=get_blob_storage(),
+                db=get_database()
+            )
+        # Note: in a pure sync test environment this might fail if event loop isn't running,
+        # but FastApi should have an event loop.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(simulate_webhook())
+        except RuntimeError:
+            asyncio.run(simulate_webhook())
 
 class FakeEventPublisher(IEventPublisher):
     async def publish_progress(self, session_id: str, room: str, status: str, progress: int = None):

@@ -38,7 +38,7 @@ describe('MagicDropzone Component', () => {
     const awsS3Call = useMock.mock.calls.find(call => call[1] && call[1].getUploadParameters);
     expect(awsS3Call).toBeDefined();
     
-    const getUploadParameters = awsS3Call[1].getUploadParameters;
+    const getUploadParameters = awsS3Call![1].getUploadParameters;
     const file = { name: 'test.jpg', type: 'image/jpeg' };
     const params = getUploadParameters(file);
     
@@ -51,7 +51,7 @@ describe('MagicDropzone Component', () => {
     const completeCall = onMock.mock.calls.find(call => call[0] === 'complete');
     expect(completeCall).toBeDefined();
     
-    const completeHandler = completeCall[1];
+    const completeHandler = completeCall![1];
     
     act(() => {
       completeHandler({ successful: true });

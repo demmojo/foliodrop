@@ -22,7 +22,7 @@ vi.mock('jszip', () => {
 // Mock fetch for API calls
 global.fetch = vi.fn();
 
-let mockSearchParams = new Map();
+const mockSearchParams = new Map();
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({
@@ -52,9 +52,9 @@ vi.mock('./ProcessingConsole', () => {
 
 vi.mock('./ReviewGrid', () => {
   return {
-    default: ({ onConfirm, onKeepItem, onDiscardItem }: any) => (
+    default: ({ onConfirm, onKeepItem, onDiscardItem, items }: any) => (
       <div data-testid="mock-review-grid">
-        <button data-testid="review-confirm" onClick={onConfirm}>Confirm Export</button>
+        <button data-testid="review-confirm" onClick={() => onConfirm(items)}>Confirm Export</button>
         <button data-testid="review-keep" onClick={() => onKeepItem('job1')}>Keep</button>
         <button data-testid="review-discard" onClick={() => onDiscardItem('job1')}>Discard</button>
       </div>
@@ -71,17 +71,20 @@ describe('UploadFlow Component', () => {
       activeSessionId: null,
       quota: { used: 0, limit: 100 },
       styleProfiles: [],
-      toastMessage: null,
-      flowState: 'IDLE',
-      uploadedFiles: [],
-      photoGroups: []
+      
+      
+      
+      
     });
     
     // Provide a robust default fetch mock to prevent unhandled promise rejections
     // and missing json() properties from causing cascaded failures in rehydrateSession.
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
         if (url.includes('/api/v1/quota')) {
             return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+        }
+        if (url.includes('/api/v1/sessions/generate')) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'mock-session-code' }) });
         }
         if (url.includes('/api/v1/jobs/active') || url.includes('/api/v1/sessions/')) {
             return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
@@ -165,9 +168,12 @@ describe('UploadFlow Component', () => {
     });
     
     // Setup API mocks for upload and finalize
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
       if (url.includes('/api/v1/quota')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+      }
+      if (url.includes('/api/v1/sessions/generate')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'mock-session-code' }) });
       }
       if (url.includes('/api/v1/sessions/validate')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true }) });
@@ -233,7 +239,7 @@ describe('UploadFlow Component', () => {
 
   it('shows error if upload fails', async () => {
     // Reset state
-    useJobStore.setState({ activeSessionId: null, jobs: {}, quota: null, flowState: 'IDLE' });
+    useJobStore.setState({ activeSessionId: null, jobs: {}, quota: null });
 
     await act(async () => {
       render(<UploadFlow />);
@@ -247,9 +253,12 @@ describe('UploadFlow Component', () => {
     });
 
     // Reset fetch mock for the upload failure part
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
        if (url.includes('/api/v1/upload-urls')) {
          return Promise.reject(new Error('Network error'));
+       }
+       if (url.includes('/api/v1/sessions/validate')) {
+         return Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true }) });
        }
        if (url.includes('/api/v1/jobs/active')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
@@ -280,6 +289,9 @@ describe('UploadFlow Component', () => {
 
     // Should show error and return to IDLE
     await waitFor(() => {
+      if (!screen.queryByText('Pipeline initialization failed. Please try again.')) {
+        screen.debug();
+      }
       expect(screen.getByText('Pipeline initialization failed. Please try again.')).toBeInTheDocument();
     });
   });
@@ -365,14 +377,14 @@ describe('UploadFlow Component', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
     // IMPORTANT: Make sure this mock fetch provides json() and ok:true for the quota/rehydrate calls that happen on mount
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
       if (url.includes('/api/v1/quota')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
       }
       if (url.includes('/api/v1/sessions/')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: {} }) });
       }
-      return Promise.rejectedValue(new Error('Download failed'));
+      return Promise.reject(new Error('Download failed'));
     });
 
     await act(async () => {
@@ -405,12 +417,12 @@ describe('UploadFlow Component', () => {
     const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
 
     await act(async () => {
-      fireEvent.change(sessionCodeInput, { target: { value: 'short' } });
+      fireEvent.change(sessionCodeInput, { target: { value: 'sh' } });
       fireEvent.blur(sessionCodeInput);
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Must be at least 6 characters.")).toBeInTheDocument();
+      expect(screen.getByText("Must be at least 3 characters.")).toBeInTheDocument();
     });
   });
   it('shows recent sessions and can resume from them', async () => {
@@ -423,7 +435,7 @@ describe('UploadFlow Component', () => {
     localStorage.setItem('hdr_recent_sessions', JSON.stringify(pastSessions));
 
     // IMPORTANT: Make sure this mock fetch provides json() and ok:true for the quota/rehydrate calls that happen on mount
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
       if (url.includes('/api/v1/quota')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
       }
@@ -439,7 +451,7 @@ describe('UploadFlow Component', () => {
     expect(screen.getByText('sess-old-1')).toBeInTheDocument();
     
     // Test expanding the list
-    const showMoreBtn = screen.getByText(/Show \d+ more rooms/i);
+    const showMoreBtn = screen.getByText(/Show \d+ more sessions/i);
     await act(async () => {
       fireEvent.click(showMoreBtn);
     });
@@ -460,7 +472,7 @@ describe('UploadFlow Component', () => {
   it('shows welcome back prompt if hdr_session_code exists in localStorage', async () => {
     localStorage.setItem('hdr_session_code', 'welcome-back-code');
     
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
@@ -484,7 +496,7 @@ describe('UploadFlow Component', () => {
   it('shows welcome back prompt and handles starting a new room', async () => {
     localStorage.setItem('hdr_session_code', 'welcome-back-code');
     
-    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: any) => {
       if (url.includes('/api/v1/sessions/generate')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-session-123' }) } as any);
       }
@@ -519,9 +531,12 @@ describe('UploadFlow Component', () => {
     });
     
     // Setup API mocks
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
       if (url.includes('/api/v1/quota')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+      }
+      if (url.includes('/api/v1/sessions/generate')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'mock-session-code' }) });
       }
       if (url.includes('/api/v1/sessions/validate')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true }) });
@@ -587,12 +602,11 @@ describe('UploadFlow Component', () => {
     useJobStore.setState({
       activeSessionId: null,
       jobs: {},
-      quota: null,
-      flowState: 'IDLE'
+      quota: null
     });
     
     // Setup API mock
-    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: any) => {
       if (url.includes('/api/v1/jobs/active')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) } as any);
       }
@@ -624,9 +638,9 @@ describe('UploadFlow Component', () => {
   });
 
   it('handles resume session via Resume button', async () => {
-    useJobStore.setState({ activeSessionId: null, flowState: 'IDLE' });
+    useJobStore.setState({ activeSessionId: null });
     
-    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: any) => {
       if (url.includes('/api/v1/jobs/active')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) } as any);
       }
@@ -657,12 +671,12 @@ describe('UploadFlow Component', () => {
   });
 
   it('handles starting a new room', async () => {
-    useJobStore.setState({ activeSessionId: null, flowState: 'IDLE' });
+    useJobStore.setState({ activeSessionId: null });
     
     // Reset any pending session code state manually since we are outside the component
     localStorage.removeItem('hdr_session_code');
 
-    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: any) => {
       if (url.includes('/api/v1/sessions/generate')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-session-123' }) } as any);
       }
@@ -697,9 +711,9 @@ describe('UploadFlow Component', () => {
   it('handles drag and drop overlay', async () => {
     // Reset state to ensure we are in IDLE
     useJobStore.setState({
-      flowState: 'IDLE',
-      uploadedFiles: [],
-      photoGroups: [],
+      activeSessionId: null,
+      jobs: {},
+      quota: null,
     });
 
     await act(async () => {
@@ -747,9 +761,12 @@ describe('UploadFlow Component', () => {
 
   it('handles toast messages', async () => {
     // Render in IDLE
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
         if (url.includes('/api/v1/quota')) {
             return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+        }
+        if (url.includes('/api/v1/sessions/generate')) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'mock-session-code' }) });
         }
         if (url.includes('/api/v1/jobs/active') || url.includes('/api/v1/sessions/')) {
             return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
@@ -781,21 +798,20 @@ describe('UploadFlow Component', () => {
     useJobStore.setState({
       activeSessionId: null,
       jobs: {},
-      quota: null,
-      flowState: 'IDLE'
+      quota: null
     });
     
     mockSearchParams.set('session', 'sess');
     // We can simulate the state reaching REVIEW with jobs
     useJobStore.setState({
       activeSessionId: 'sess',
-      flowState: 'REVIEW',
+      
       jobs: {
         'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', sceneName: 'Room', status: 'READY', isFlagged: false } }
       }
     });
 
-    (global.fetch as any).mockImplementation((url: string) => {
+    (global.fetch as any).mockImplementation((url: any) => {
       if (url.includes('/api/v1/quota')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
       }

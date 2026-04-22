@@ -55,15 +55,25 @@ export default function UploadFlow() {
         setPendingSessionCode(storedSessionCode);
         setShowResumePrompt(true);
       } else {
-        fetch(`${API_URL}/api/v1/sessions/generate`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.code) {
-              setSessionCode(data.code);
-              localStorage.setItem('hdr_session_code', data.code);
+        const fetchSession = async () => {
+          try {
+            const { auth } = await import('@/lib/firebase');
+            const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+            const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            const res = await fetch(`${API_URL}/api/v1/sessions/generate`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.code) {
+                setSessionCode(data.code);
+                localStorage.setItem('hdr_session_code', data.code);
+              }
             }
-          })
-          .catch(console.error);
+          } catch (e) {
+            console.error("Failed to generate session", e);
+          }
+        };
+        fetchSession();
       }
     }
   }, [flowState, activeSessionId, sessionCode, showResumePrompt, pendingSessionCode, API_URL]);
@@ -201,9 +211,14 @@ export default function UploadFlow() {
           
           if (validThumbnails.length === thumbnails.length) {
               try {
+                  const { auth } = await import('@/lib/firebase');
+                  const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+                  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                  if (token) headers['Authorization'] = `Bearer ${token}`;
+
                   const res = await fetch(`${API_URL}/api/v1/group-photos`, {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers,
                       body: JSON.stringify({ files: validThumbnails.map(t => ({ name: t.name, thumbnail: t.thumbnail })) })
                   });
                   if (res.ok) {
@@ -285,9 +300,14 @@ export default function UploadFlow() {
       
       const fileNames = filePayloads.map(fp => fp.uniqueName);
       
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const urlRes = await fetch(`${API_URL}/api/v1/upload-urls`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ session_id: sid, files: fileNames })
       });
       const urlData = await urlRes.json();
@@ -347,7 +367,7 @@ export default function UploadFlow() {
 
       const finalizeRes = await fetch(`${API_URL}/api/v1/finalize-job`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ session_id: sid, idempotency_key: idempotencyKey, groups: groupedFiles })
       });
       

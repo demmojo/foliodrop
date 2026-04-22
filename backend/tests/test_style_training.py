@@ -21,8 +21,8 @@ def client():
 
 def test_upload_style_image(client):
     c, db, storage = client
-    
-    # Upload 4 images to test FIFO eviction
+
+    # Upload 4 images
     for i in range(4):
         response = c.post(
             "/api/v1/style/upload",
@@ -31,13 +31,26 @@ def test_upload_style_image(client):
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success"
-        
-    # Check DB
-    images = db.get_style_images("default")
-    assert len(images) == 3
+
+    # Check DB using API
+    response = c.get("/api/v1/style/profiles")
+    assert response.status_code == 200
+    profiles = response.json()["profiles"]
+    assert len(profiles) == 4
+    
+    # Delete one
+    profile_id = profiles[0]["id"]
+    response = c.delete(f"/api/v1/style/profiles/{profile_id}")
+    assert response.status_code == 200
+    
+    # Check again
+    response = c.get("/api/v1/style/profiles")
+    assert response.status_code == 200
+    profiles = response.json()["profiles"]
+    assert len(profiles) == 3
     # The first one should have been evicted
-    assert not any("style0" in img for img in images)
-    assert any("style3" in img for img in images)
+    assert not any("style0" in profile["blob_path"] for profile in profiles)
+    assert any("style3" in profile["blob_path"] for profile in profiles)
 
 def test_upload_training_pair(client):
     c, db, storage = client
@@ -104,7 +117,7 @@ async def test_process_hdr_group_use_case_with_style_urls():
     fake_bytes = encoded.tobytes()
     storage.download_blobs = lambda s, f: [fake_bytes, fake_bytes]
     
-    res = await use_case.execute("job_123", "sess_1", "Room 1", ["photo1.jpg", "photo2.jpg"])
+    res = await use_case.execute("default", "job_123", "sess_1", "Room 1", ["photo1.jpg", "photo2.jpg"])
     assert res["status"] == "COMPLETED"
     
     # The telemetry should have "mock": "used dummy-key"

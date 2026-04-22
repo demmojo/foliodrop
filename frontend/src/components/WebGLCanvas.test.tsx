@@ -52,7 +52,7 @@ describe('WebGLCanvas', () => {
     expect(consoleWarnSpy).toHaveBeenCalledWith('display-p3 not supported, falling back to srgb');
     
     // Trigger Zustand store update
-    useImageStore.setState({ exposure: 0.5 });
+    useImageStore.setState({ activeSessionId: 'test' });
     
     expect(consoleLogSpy).toHaveBeenCalledWith('Transient state update for WebGL:', expect.any(Object));
 

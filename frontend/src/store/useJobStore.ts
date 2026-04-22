@@ -43,6 +43,8 @@ interface JobStore {
   setJobs: (jobs: Record<string, Job>) => void;
   setSessionId: (id: string | null) => void;
   setStyleProfiles: (profiles: StyleProfile[]) => void;
+  fetchStyleProfiles: () => Promise<void>;
+  deleteStyleProfile: (id: string) => Promise<void>;
   uploadStyleProfile: (file: File) => Promise<void>;
   uploadTrainingPair: (brackets: File[], finalEdit: File) => Promise<void>;
   overrideWithManualEdit: (jobId: string, file: File) => Promise<void>;
@@ -60,12 +62,59 @@ export const useJobStore = create<JobStore>((set, get) => ({
   setSessionId: (id) => set({ activeSessionId: id }),
   setStyleProfiles: (profiles) => set({ styleProfiles: profiles }),
 
+  fetchStyleProfiles: async () => {
+    try {
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      const res = await fetch(`${API_URL}/api/v1/style/profiles`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const profiles = (data.profiles || []).map((p: any) => ({
+          id: p.id,
+          name: p.blob_path.split('_').pop() || 'Style Profile',
+          url: p.url,
+          createdAt: p.created_at
+        }));
+        set({ styleProfiles: profiles });
+      }
+    } catch (e) {
+      console.error("Failed to fetch style profiles", e);
+    }
+  },
+
+  deleteStyleProfile: async (id: string) => {
+    try {
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const res = await fetch(`${API_URL}/api/v1/style/profiles/${id}`, {
+        method: 'DELETE',
+        headers
+      });
+      if (res.ok) {
+        set((state) => ({
+          styleProfiles: state.styleProfiles.filter((p) => p.id !== id)
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to delete style profile", e);
+    }
+  },
+
   uploadStyleProfile: async (file: File) => {
     try {
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch(`${API_URL}/api/v1/style/upload`, {
         method: 'POST',
+        headers,
         body: formData,
       });
       if (res.ok) {
@@ -77,9 +126,8 @@ export const useJobStore = create<JobStore>((set, get) => ({
         }).catch(()=>{});
       } catch(e) {}
       // #endregion
-        // Mock updating local state if backend isn't ready
-        const newProfile = { id: Date.now().toString(), name: file.name, createdAt: Date.now(), url: URL.createObjectURL(file) };
-        set((state) => ({ styleProfiles: [...state.styleProfiles, newProfile] }));
+        // Refetch to get the actual ID and URL from the backend
+        await get().fetchStyleProfiles();
       }
     } catch (e) {
       console.error("Failed to upload style profile", e);
@@ -88,11 +136,16 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   uploadTrainingPair: async (brackets: File[], finalEdit: File) => {
     try {
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const formData = new FormData();
       brackets.forEach(b => formData.append('brackets', b));
       formData.append('final_edit', finalEdit);
       const res = await fetch(`${API_URL}/api/v1/training/upload`, {
         method: 'POST',
+        headers,
         body: formData,
       });
       if (!res.ok) {
@@ -105,10 +158,15 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   overrideWithManualEdit: async (jobId: string, file: File) => {
     try {
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch(`${API_URL}/api/v1/jobs/${jobId}/override`, {
         method: 'POST',
+        headers,
         body: formData,
       });
       
@@ -138,7 +196,11 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   fetchQuota: async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/quota`);
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const res = await fetch(`${API_URL}/api/v1/quota`, { headers });
       if (res.ok) {
       // #region agent log
       try {
@@ -169,7 +231,11 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   rehydrateSession: async (sessionId: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/jobs/active?session_id=${sessionId}`);
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const res = await fetch(`${API_URL}/api/v1/jobs/active?session_id=${sessionId}`, { headers });
       if (res.ok) {
       // #region agent log
       try {
@@ -228,9 +294,14 @@ export const useJobStore = create<JobStore>((set, get) => ({
     if (dueIds.length === 0) return;
 
     try {
+      const { auth } = await import('@/lib/firebase');
+      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${API_URL}/api/v1/jobs/batch-status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ job_ids: dueIds })
       });
       

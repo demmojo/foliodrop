@@ -29,11 +29,11 @@ def test_generate_session_fails():
     app.dependency_overrides.clear()
 
 def test_validate_session_short():
-    response = client.post("/api/v1/sessions/validate", json={"code": "short"})
+    response = client.post("/api/v1/sessions/validate", json={"code": "sh"})
     assert response.status_code == 200
     data = response.json()
     assert data["valid"] is False
-    assert "Code must be at least 6 letters" in data["message"]
+    assert "Code must be at least 3 letters" in data["message"]
     assert data["suggested"] is not None
 
 def test_validate_session_valid():
@@ -57,3 +57,45 @@ def test_validate_session_valid_even_if_taken():
     assert response.status_code == 200
     assert response.json()["valid"] is True
     app.dependency_overrides.clear()
+
+def test_group_photos_dummy_key():
+    response = client.post("/api/v1/group-photos", json={"files": [
+        {"name": "file1.jpg", "thumbnail": "base64"},
+        {"name": "file2.jpg", "thumbnail": "base64"}
+    ]})
+    assert response.status_code == 200
+    assert response.json()["groups"] == [["file1.jpg", "file2.jpg"]]
+
+def test_group_photos_real_key_success():
+    import os
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"}):
+        with patch("google.genai.Client") as mock_client:
+            # Need to mock the asyncio.to_thread call or mock generate_content inside it
+            # asyncio.to_thread runs the sync function
+            mock_model = MagicMock()
+            mock_response = MagicMock()
+            mock_response.text = '```json\n[["file1.jpg", "file2.jpg"]]\n```'
+            mock_model.generate_content.return_value = mock_response
+            mock_client.return_value.models = mock_model
+            
+            response = client.post("/api/v1/group-photos", json={"files": [
+                {"name": "file1.jpg", "thumbnail": "base64data=="},
+                {"name": "file2.jpg", "thumbnail": "data:image/jpeg;base64,base64data=="}
+            ]})
+            assert response.status_code == 200
+            assert response.json()["groups"] == [["file1.jpg", "file2.jpg"]]
+
+def test_group_photos_real_key_error():
+    import os
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"}):
+        with patch("google.genai.Client") as mock_client:
+            mock_model = MagicMock()
+            mock_model.generate_content.side_effect = Exception("failed")
+            mock_client.return_value.models = mock_model
+            
+            response = client.post("/api/v1/group-photos", json={"files": [
+                {"name": "file1.jpg", "thumbnail": "base64data=="},
+                {"name": "file2.jpg", "thumbnail": "base64data=="}
+            ]})
+            assert response.status_code == 200
+            assert response.json()["groups"] == [["file1.jpg", "file2.jpg"]]

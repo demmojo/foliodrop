@@ -109,18 +109,34 @@ class FirestoreAdapter(IDatabase):
         doc_ref = self.db.collection("agencies").document(agency_id).collection("style_images").document()
         doc_ref.set({"blob_path": blob_path, "created_at": now})
 
-        docs = self.db.collection("agencies").document(agency_id).collection("style_images").order_by("created_at").stream()
-        docs = list(docs)
-        deleted_paths = []
-        if len(docs) > 3:
-            for doc in docs[:-3]:
-                deleted_paths.append(doc.to_dict().get("blob_path"))
-                doc.reference.delete()
-        return deleted_paths
+        return []
 
-    def get_style_images(self, agency_id: str) -> List[str]:
-        docs = self.db.collection("agencies").document(agency_id).collection("style_images").order_by("created_at").stream()
+    def get_style_images(self, agency_id: str, limit: int = 2) -> List[str]:
+        docs = self.db.collection("agencies").document(agency_id).collection("style_images").order_by("created_at", direction=firestore.Query.DESCENDING).limit(limit).stream()
         return [doc.to_dict().get("blob_path") for doc in docs if doc.to_dict().get("blob_path")]
+
+    def get_style_profiles(self, agency_id: str) -> List[dict]:
+        docs = self.db.collection("agencies").document(agency_id).collection("style_images").order_by("created_at", direction=firestore.Query.DESCENDING).stream()
+        profiles = []
+        for doc in docs:
+            data = doc.to_dict()
+            blob_path = data.get("blob_path")
+            if blob_path:
+                profiles.append({
+                    "id": doc.id,
+                    "blob_path": blob_path,
+                    "created_at": data.get("created_at").timestamp() * 1000 if data.get("created_at") else 0
+                })
+        return profiles
+
+    def delete_style_profile(self, agency_id: str, profile_id: str) -> Optional[str]:
+        doc_ref = self.db.collection("agencies").document(agency_id).collection("style_images").document(profile_id)
+        doc = doc_ref.get()
+        if doc.exists:
+            blob_path = doc.to_dict().get("blob_path")
+            doc_ref.delete()
+            return blob_path
+        return None
 
     def save_training_pair(self, agency_id: str, bracket_paths: List[str], final_path: str) -> None:
         import datetime
@@ -131,24 +147,49 @@ class FirestoreAdapter(IDatabase):
             "created_at": now
         })
 
+    def get_recent_training_pairs(self, agency_id: str, limit: int = 2) -> List[dict]:
+        docs = self.db.collection("agencies").document(agency_id).collection("training_pairs").order_by("created_at", direction=firestore.Query.DESCENDING).limit(limit).stream()
+        return [doc.to_dict() for doc in docs]
+
     def check_session_code_availability(self, code: str) -> bool:
         doc = self.db.collection("sessions").document(code).get()
         if doc.exists:
+            # Check if there are any jobs currently pending or processing for this code
+            active_jobs = self.db.collection("jobs").where("session_id", "==", code).where("status", "in", ["PENDING", "PROCESSING"]).limit(1).stream()
+            has_active_jobs = False
+            for _ in active_jobs:
+                has_active_jobs = True
+                break
+                
+            if has_active_jobs:
+                return False
+
             data = doc.to_dict()
             created_at = data.get("created_at")
             if created_at:
                 from datetime import datetime, timezone, timedelta
-                # created_at might be DatetimeWithNanoseconds
-                if datetime.now(timezone.utc) - created_at < timedelta(days=90):
+                # Give a 24-hour grace period before a session is considered "no longer active"
+                if datetime.now(timezone.utc) - created_at < timedelta(hours=24):
                     return False
         return True
 
     def reserve_session_code(self, code: str) -> bool:
         from firebase_admin import firestore
+        
+        # Cleanup any old jobs from previous usage of this code
+        old_jobs = self.db.collection("jobs").where("session_id", "==", code).stream()
+        for doc in old_jobs:
+            doc.reference.delete()
+            
+        # Cleanup any old processing results
+        old_results = self.db.collection("sessions").document(code).collection("results").stream()
+        for doc in old_results:
+            doc.reference.delete()
+
         self.db.collection("sessions").document(code).set({
             "created_at": firestore.SERVER_TIMESTAMP,
             "reserved": True
-        }, merge=True)
+        }, merge=False)
         return True
 
 class GCSBlobStorageAdapter(IBlobStorage):
@@ -337,9 +378,9 @@ class CloudTasksAdapter(ITaskQueue):
         }
         # self.client.create_task(request={"parent": self.queue_path, "task": task})
 
-    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str]) -> None:
+    def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str], agency_id: str = "default") -> None:
         import json
-        body_dict = {"job_id": job_id, "session_id": session_id, "room_name": room_name, "photos": photos}
+        body_dict = {"job_id": job_id, "session_id": session_id, "room_name": room_name, "photos": photos, "agency_id": agency_id}
         
         # We need the actual Cloud Run URL to send tasks to.
         # It's better to pass this as an env var, but for now we can rely on the typical format

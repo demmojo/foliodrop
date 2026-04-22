@@ -2,13 +2,18 @@ import React, { useState, useRef } from 'react';
 import { useJobStore } from '@/store/useJobStore';
 
 export const AgencySettings: React.FC = () => {
-  const { styleProfiles, uploadStyleProfile, uploadTrainingPair } = useJobStore();
+  const { styleProfiles, uploadStyleProfile, uploadTrainingPair, fetchStyleProfiles, deleteStyleProfile } = useJobStore();
   
   const [isUploadingStyle, setIsUploadingStyle] = useState(false);
   const [isUploadingTraining, setIsUploadingTraining] = useState(false);
+  const [isDeletingStyle, setIsDeletingStyle] = useState<string | null>(null);
   
   const styleInputRef = useRef<HTMLInputElement>(null);
   
+  React.useEffect(() => {
+    fetchStyleProfiles();
+  }, [fetchStyleProfiles]);
+
   // For training pairs
   const [trainingBrackets, setTrainingBrackets] = useState<File[]>([]);
   const [trainingFinalEdit, setTrainingFinalEdit] = useState<File | null>(null);
@@ -48,14 +53,27 @@ export const AgencySettings: React.FC = () => {
         {styleProfiles.length > 0 ? (
           <ul className="space-y-2 mb-4">
             {styleProfiles.map(profile => (
-              <li key={profile.id} className="flex items-center justify-between p-3 bg-background rounded-md text-sm border border-border/50">
+              <li key={profile.id} className="flex items-center justify-between p-3 bg-background rounded-md text-sm border border-border/50 group">
                 <div className="flex items-center gap-3">
                   {profile.url && <img src={profile.url} alt="style" className="w-8 h-8 rounded object-cover" />}
                   <span className="font-medium text-foreground">{profile.name}</span>
                 </div>
-                <span className="text-xs text-muted">
-                  {new Date(profile.createdAt).toLocaleDateString()}
-                </span>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-muted">
+                    {new Date(profile.createdAt).toLocaleDateString()}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      setIsDeletingStyle(profile.id);
+                      await deleteStyleProfile(profile.id);
+                      setIsDeletingStyle(null);
+                    }}
+                    disabled={isDeletingStyle === profile.id}
+                    className="text-xs text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                  >
+                    {isDeletingStyle === profile.id ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

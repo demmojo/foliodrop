@@ -86,20 +86,21 @@ export function groupPhotosIntoScenes(photos: PhotoMeta[], maxGapMs: number = 25
       } catch(e) {}
       // #endregion
 
-      // 1. Time gap > 2.5s usually means a new bracketed set
-      if (gap > maxGapMs) {
-        isNewScene = true;
-      }
-      // 2. If gap is very small but exposure compensation repeats, it's a new set
-      else if (photo.exposureCompensation !== undefined && currentGroup.length >= 3) {
-         if (photo.exposureCompensation === currentGroup[0].exposureCompensation) {
-            isNewScene = true;
-         }
-      }
-      // 3. Fallback: if we have 0 gap and no exposure data, chunk by 5
-      else if (gap === 0 && currentGroup.length >= 5 && photo.exposureCompensation === undefined) {
-         isNewScene = true;
-      }
+    // 1. Time gap > 2.5s usually means a new bracketed set
+    if (gap > maxGapMs) {
+      isNewScene = true;
+    }
+    // 2. If gap is very small but exposure compensation repeats, it's a new set
+    else if (photo.exposureCompensation !== undefined && currentGroup.length >= 3) {
+       if (photo.exposureCompensation === currentGroup[0].exposureCompensation) {
+          isNewScene = true;
+       }
+    }
+    else if (photo.exposureTime !== undefined && currentGroup.length >= 3) {
+       if (photo.exposureTime === currentGroup[0].exposureTime) {
+          isNewScene = true;
+       }
+    }
 
       if (isNewScene) {
         groups.push({

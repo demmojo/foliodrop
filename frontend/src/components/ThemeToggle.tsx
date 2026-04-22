@@ -32,7 +32,7 @@ export function ThemeToggle() {
       <span className="sr-only">Enable {isDark ? 'light' : 'dark'} mode</span>
       <span
         className={clsx(
-          "inline-block h-6 w-6 transform rounded-full bg-surface shadow-sm transition-transform duration-300 ease-in-out flex items-center justify-center",
+          "flex h-6 w-6 transform rounded-full bg-surface shadow-sm transition-transform duration-300 ease-in-out items-center justify-center",
           isDark ? "translate-x-7" : "translate-x-1"
         )}
       >

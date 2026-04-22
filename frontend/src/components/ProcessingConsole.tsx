@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useTranslation } from '../hooks/useTranslation';
 import { useJobStore } from '../store/useJobStore';
-import { Info, Loader2, Copy, Check, ChevronRight } from 'lucide-react';
+import { Info, Loader2, Copy, Check, ChevronRight, AlertTriangle, ImageIcon } from 'lucide-react';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
@@ -11,22 +10,7 @@ interface ProcessingConsoleProps {
   onComplete: (data?: any) => void;
 }
 
-const ALL_STAGES = [
-  { threshold: 0, text: "Initializing generative pipeline..." },
-  { threshold: 5, text: "Allocating cloud compute instances..." },
-  { threshold: 12, text: "Analyzing architectural structures..." },
-  { threshold: 20, text: "Aligning bracket exposures..." },
-  { threshold: 30, text: "Extracting windows and highlights..." },
-  { threshold: 40, text: "Fusing dynamic range..." },
-  { threshold: 55, text: "Applying generative tone mapping..." },
-  { threshold: 70, text: "Applying geometry & perspective corrections..." },
-  { threshold: 85, text: "Enhancing micro-contrast & textures..." },
-  { threshold: 92, text: "Running AI color grading..." },
-  { threshold: 98, text: "Finalizing ML outputs..." },
-];
-
 export default function ProcessingConsole({ sessionId, expectedScenes = 1, onComplete }: ProcessingConsoleProps) {
-  const { t } = useTranslation();
   const { jobs } = useJobStore();
   
   const [realProgress, setRealProgress] = useState<number>(0);
@@ -38,11 +22,11 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
   const [logQueue, setLogQueue] = useState<string[]>([]);
   const lastThresholdRef = useRef(-1);
 
+  const sessionJobs = Object.values(jobs).filter(j => j.status !== 'PENDING'); 
+  const totalJobs = Math.max(expectedScenes, sessionJobs.length);
+  
   useEffect(() => {
     if (!sessionId) return;
-
-    const sessionJobs = Object.values(jobs).filter(j => j.status !== 'PENDING'); 
-    const totalJobs = Math.max(expectedScenes, sessionJobs.length);
     
     const completedItems = sessionJobs.filter(j => 
        ['COMPLETED', 'FLAGGED', 'NEEDS_REVIEW', 'READY', 'FAILED'].includes(j.status)
@@ -83,69 +67,73 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
     return () => clearInterval(interval);
   }, [realProgress]);
 
-  // Enqueue logs based on displayProgress
-  useEffect(() => {
-    const newStages = ALL_STAGES.filter(
-      s => s.threshold > lastThresholdRef.current && s.threshold <= displayProgress
-    );
-
-    if (newStages.length > 0) {
-      setLogQueue(prev => [...prev, ...newStages.map(s => s.text)]);
-      lastThresholdRef.current = newStages[newStages.length - 1].threshold;
-    }
-  }, [displayProgress]);
-
-  // Dequeue logs one by one with a short delay so the user can read them
-  useEffect(() => {
-    if (logQueue.length > 0) {
-      const timer = setTimeout(() => {
-        setVisibleLogs(prev => {
-           const next = [...prev, logQueue[0]];
-           // Keep at most 5 lines
-           if (next.length > 5) return next.slice(next.length - 5);
-           return next;
-        });
-        setLogQueue(prev => prev.slice(1));
-      }, 1200); // 1.2s delay between streaming lines
-      return () => clearTimeout(timer);
-    }
-  }, [logQueue]);
-
   return (
     <div className="w-full max-w-2xl text-center px-6 animate-in fade-in duration-500 flex flex-col items-center">
       <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-8 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/60">
         Processing Your Shoot
       </h2>
       
-      {/* Console Streaming Logs */}
-      <div className="w-full max-w-md bg-[#0D0D0C] border border-[#2A2A2A] shadow-2xl rounded-xl p-5 mb-8 h-[160px] relative flex flex-col justify-end text-left overflow-hidden">
-         {/* Top fade out gradient */}
-         <div className="absolute top-0 left-0 w-full h-12 bg-gradient-to-b from-[#0D0D0C] to-transparent z-10" />
-         
-         <div className="flex flex-col gap-3 z-0 w-full">
-            {visibleLogs.length === 0 && (
-               <div className="flex items-center gap-3 text-sm font-mono text-[#8A8A8A] opacity-60">
-                 <Loader2 className="w-4 h-4 animate-spin" />
-                 Waking up pipeline...
-               </div>
-            )}
-            {visibleLogs.map((log, i) => {
-               const isLast = i === visibleLogs.length - 1;
-               const opacity = isLast ? 'opacity-100' : (i === visibleLogs.length - 2 ? 'opacity-70' : 'opacity-40');
-               const color = isLast ? 'text-[#EAEAEA]' : 'text-[#8A8A8A]';
-               
-               return (
-                  <div key={`${log}-${i}`} className={`flex items-center gap-3 text-sm font-mono tracking-tight transition-all duration-500 ${opacity} ${color} ${isLast ? 'translate-x-0' : 'translate-x-0'}`}>
-                     {isLast && displayProgress < 100 ? (
-                        <Loader2 className="w-4 h-4 animate-spin shrink-0 text-[#B0A084]" />
-                     ) : (
-                        <Check className="w-4 h-4 text-[#4E6E50] shrink-0" />
-                     )}
-                     <span className="truncate">{log}</span>
-                  </div>
-               );
-            })}
-         </div>
+      {/* Real-time Job Status Grid */}
+      <div className="w-full max-w-3xl mb-12">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          {sessionJobs.map((job, i) => {
+             const isDone = ['COMPLETED', 'FLAGGED', 'NEEDS_REVIEW', 'READY'].includes(job.status);
+             const isFailed = job.status === 'FAILED';
+             
+             return (
+                <div key={job.id} className="relative aspect-[3/2] rounded-xl overflow-hidden bg-[#0D0D0C] border border-[#2A2A2A] shadow-sm flex items-center justify-center group">
+                   {isDone && job.result?.thumbUrl ? (
+                      <>
+                        <img 
+                          src={job.result.thumbUrl} 
+                          alt={`Scene ${i+1}`} 
+                          className="w-full h-full object-cover animate-in fade-in zoom-in-95 duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute bottom-2 left-2 right-2 text-left opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                           <span className="text-[10px] font-medium text-white truncate block drop-shadow-md">
+                             {job.result.sceneName || `Scene ${i+1}`}
+                           </span>
+                        </div>
+                      </>
+                   ) : isFailed ? (
+                      <div className="flex flex-col items-center gap-2 text-warning/80">
+                         <AlertTriangle className="w-5 h-5" />
+                         <span className="text-[10px] font-medium uppercase tracking-wider">Failed</span>
+                      </div>
+                   ) : (
+                      <div className="flex flex-col items-center gap-3 w-full h-full justify-center">
+                         <div className="relative">
+                            <ImageIcon className="w-6 h-6 text-[#8A8A8A] opacity-20" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                               <div className="w-8 h-8 border-2 border-foreground/10 border-t-foreground/40 rounded-full animate-spin" />
+                            </div>
+                         </div>
+                         <span className="text-[10px] uppercase font-bold tracking-widest text-[#8A8A8A]">Processing</span>
+                      </div>
+                   )}
+                   
+                   {/* Overlay Status Badge */}
+                   <div className="absolute top-2 right-2 z-10">
+                      {isDone ? (
+                         <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center backdrop-blur-md border border-emerald-500/30">
+                            <Check className="w-3 h-3 text-emerald-500" />
+                         </div>
+                      ) : isFailed ? null : (
+                         <div className="w-2 h-2 rounded-full bg-[#B0A084] animate-pulse shadow-[0_0_8px_rgba(176,160,132,0.5)]" />
+                      )}
+                   </div>
+                </div>
+             );
+          })}
+          
+          {/* Skeleton placeholders for expected scenes not yet in jobs (rare but possible during init) */}
+          {Array.from({ length: Math.max(0, expectedScenes - sessionJobs.length) }).map((_, i) => (
+             <div key={`skeleton-${i}`} className="relative aspect-[3/2] rounded-xl overflow-hidden bg-[#0D0D0C]/50 border border-[#2A2A2A]/50 shadow-sm flex items-center justify-center">
+                <Loader2 className="w-5 h-5 text-muted/30 animate-spin" />
+             </div>
+          ))}
+        </div>
       </div>
 
       <div className="w-full max-w-md bg-border h-1.5 rounded-full overflow-hidden mb-12 relative">

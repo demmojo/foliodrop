@@ -129,6 +129,23 @@ describe('exif utils', () => {
       expect(groups[1].photos).toHaveLength(3);
     });
 
+    it('should group photos based on repeating exposure time sequence', () => {
+      const photos = [
+        { file: new File([''], '1.jpg'), captureTime: 1000, exposureTime: 0.1, previewUrl: 'url1' },
+        { file: new File([''], '2.jpg'), captureTime: 1100, exposureTime: 0.5, previewUrl: 'url2' },
+        { file: new File([''], '3.jpg'), captureTime: 1200, exposureTime: 1.0, previewUrl: 'url3' },
+        { file: new File([''], '4.jpg'), captureTime: 1300, exposureTime: 0.1, previewUrl: 'url4' },
+        { file: new File([''], '5.jpg'), captureTime: 1400, exposureTime: 0.5, previewUrl: 'url5' },
+        { file: new File([''], '6.jpg'), captureTime: 1500, exposureTime: 1.0, previewUrl: 'url6' },
+      ] as any;
+
+      const groups = groupPhotosIntoScenes(photos);
+      
+      expect(groups).toHaveLength(2);
+      expect(groups[0].photos).toHaveLength(3);
+      expect(groups[1].photos).toHaveLength(3);
+    });
+
     it('should group photos in chunks of 5 when captureTime is exactly same and no exposure data is available', () => {
       const photos = Array.from({ length: 12 }, (_, i) => ({
         file: new File([''], `${i.toString().padStart(4, '0')}.jpg`),
@@ -138,11 +155,9 @@ describe('exif utils', () => {
 
       const groups = groupPhotosIntoScenes(photos);
       
-      // 12 photos -> 5 + 5 + 2
-      expect(groups).toHaveLength(3);
-      expect(groups[0].photos).toHaveLength(5);
-      expect(groups[1].photos).toHaveLength(5);
-      expect(groups[2].photos).toHaveLength(2);
+      // Since chunking by 5 was removed, everything goes into one group if no exposure data or gap
+      expect(groups).toHaveLength(1);
+      expect(groups[0].photos).toHaveLength(12);
     });
 
     it('should sort photos by filename when captureTime is identical', () => {

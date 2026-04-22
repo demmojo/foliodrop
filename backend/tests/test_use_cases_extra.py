@@ -15,13 +15,27 @@ from backend.core.use_cases import (
 from backend.tests.fakes import FakeDatabase, FakeTaskQueue, FakeBlobStorage, FakeEventPublisher
 
 
+def test_finalize_job_with_groups_data():
+    task_queue = FakeTaskQueue()
+    db = FakeDatabase()
+    use_case = FinalizeJobUseCase(task_queue, db)
+    
+    result = use_case.execute("fake-agency", "session", "key", groups_data=[
+        {"name": "Scene 1", "files": ["file1.jpg", "file2.jpg"]},
+        {"name": "Scene 2", "files": ["file3.jpg", "file4.jpg"]}
+    ])
+    
+    assert result["status"] == "enqueued"
+    assert result["tasks_count"] == 2
+    assert len(result["job_ids"]) == 2
+
 def test_finalize_job_quota_exceeded():
     task_queue = FakeTaskQueue()
     db = FakeDatabase()
     use_case = FinalizeJobUseCase(task_queue, db)
     
     db.increment_quota_usage = MagicMock(return_value=False)
-    result = use_case.execute("session", "key", [{"name": "file", "timestamp": 1000}])
+    result = use_case.execute("fake-agency", "session", "key", [{"name": "file", "timestamp": 1000}])
     assert result["status"] == "quota_exceeded"
 
 def test_downsample_for_vlm_small_image():
@@ -71,7 +85,7 @@ async def test_process_hdr_success_no_job():
     storage.download_blobs = lambda s, f: [fake_bytes, fake_bytes, fake_bytes]
     
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
-    result = await use_case.execute("missing_job", "session", "Room 1", ["img1.jpg", "img2.jpg", "img3.jpg"])
+    result = await use_case.execute("fake-agency", "missing_job", "session", "Room 1", ["img1.jpg", "img2.jpg", "img3.jpg"])
     assert result["status"] == "COMPLETED"
 
 @pytest.mark.asyncio
@@ -93,7 +107,7 @@ async def test_process_hdr_large_image_and_malloc_trim_fail():
     
     with patch("ctypes.CDLL") as mock_cdll:
         mock_cdll.side_effect = Exception("malloc_trim error")
-        result = await use_case.execute(job_id, "session", "Room 1", ["img1.jpg", "img2.jpg", "img3.jpg"])
+    result = await use_case.execute("fake-agency", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg", "img3.jpg"])
     
     assert result["status"] == "COMPLETED"
 
@@ -120,7 +134,7 @@ async def test_process_hdr_with_real_key_success(mock_compute_diff, mock_generat
     mock_compute_diff.return_value = (True, 0.9, 0.0) 
     
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
-    result = await use_case.execute(job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
+    result = await use_case.execute("fake-agency", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
     assert result["status"] == "COMPLETED"
 
 @pytest.mark.asyncio
@@ -146,7 +160,7 @@ async def test_process_hdr_with_real_key_failure_fallback(mock_compute_diff, moc
     mock_compute_diff.return_value = (False, 0.1, 0.5)
     
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
-    result = await use_case.execute(job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
+    result = await use_case.execute("fake-agency", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
     assert result["status"] == "FLAGGED"
 
 @pytest.mark.asyncio
@@ -170,7 +184,7 @@ async def test_process_hdr_with_real_key_exception(mock_generate, mock_client):
     mock_generate.side_effect = Exception("GenAI failed")
     
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
-    result = await use_case.execute(job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
+    result = await use_case.execute("fake-agency", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
     assert result["status"] == "FLAGGED"
 
 @pytest.mark.asyncio
@@ -185,7 +199,7 @@ async def test_process_hdr_exception_during_update():
     db.save_job(job_id, "session", "PENDING", "key_6")
     
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
-    result = await use_case.execute(job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
+    result = await use_case.execute("fake-agency", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
     assert result["status"] == "error"
 
 @pytest.mark.asyncio

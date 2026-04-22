@@ -140,7 +140,8 @@ async def generate_hybrid_hdr(
     fused_base_bytes: bytes,
     bracket_bytes_list: List[bytes],
     retry_count: int = 0,
-    style_urls: List[str] = None
+    style_urls: List[str] = None,
+    training_pairs: List[dict] = None
 ) -> Tuple[bytes, dict]:
     
     uploaded_files = []
@@ -184,7 +185,17 @@ async def generate_hybrid_hdr(
             contents.append(f"Exposure reference {i+1}/{len(bracket_files)}")
             contents.append(bf)
             
-        if style_urls:
+        if training_pairs:
+            contents.append("Here is a previous set of brackets (Exposure reference) and the exact final output the user approved (Desired Output). Match this transformation logic exactly while maintaining the structure of the current brackets.")
+            for i, pair in enumerate(training_pairs):
+                contents.append(f"Example {i+1}:")
+                # We expect pair to have 'bracket_urls' and 'final_url'
+                for j, b_url in enumerate(pair.get("bracket_urls", [])):
+                    contents.append(f"Previous Exposure {j+1}:")
+                    contents.append(types.Part.from_uri(file_uri=b_url, mime_type="image/jpeg"))
+                contents.append(f"Desired Output for Example {i+1}:")
+                contents.append(types.Part.from_uri(file_uri=pair.get("final_url", ""), mime_type="image/jpeg"))
+        elif style_urls:
             contents.append("Desired Style Reference: Apply the color grading, contrast, and tone from these reference images.")
             for url in style_urls:
                 contents.append(types.Part.from_uri(file_uri=url, mime_type="image/jpeg"))
