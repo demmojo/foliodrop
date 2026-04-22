@@ -267,4 +267,21 @@ describe('ReviewGrid Component', () => {
     render(<ReviewGrid photos={onlyReviewPhotos} onConfirm={vi.fn()} />);
     expect(screen.getByTestId('review-all-msg')).toBeInTheDocument();
   });
+
+  it('handles image error with unparseable http URL', async () => {
+    const invalidUrlPhotos: ProcessedHDR[] = [
+      { id: '1', url: 'http://[invalid-url', thumbUrl: 'http://[invalid-url', roomName: 'Test Room', status: 'READY', isFlagged: false }
+    ];
+    render(<ReviewGrid photos={invalidUrlPhotos} onConfirm={vi.fn()} />);
+
+    const img = screen.getByAltText('Test Room');
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await act(async () => {
+      fireEvent.error(img);
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to parse originalUrl as URL"), expect.any(TypeError));
+    consoleSpy.mockRestore();
+  });
 });

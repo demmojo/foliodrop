@@ -125,4 +125,44 @@ describe('SmartSaveSheet Component', () => {
     fireEvent.click(xBtn);
     expect(onCloseMock).toHaveBeenCalledTimes(2);
   });
+
+  it('handles custom tag submission with empty and valid strings', async () => {
+    vi.useFakeTimers();
+    const onCloseMock = vi.fn();
+    render(<SmartSaveSheet isOpen={true} onClose={onCloseMock} />);
+    
+    await act(async () => {
+      vi.advanceTimersByTime(1200); // Wait for ready state
+    });
+
+    const input = screen.getByPlaceholderText('Or create a new folder...');
+    
+    // Empty tag (should return early)
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '   ' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    });
+    
+    // Should still be in ready state
+    expect(screen.getByText('Suggested Folders')).toBeInTheDocument();
+
+    // Valid tag
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'Custom Room' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    });
+
+    // Wait for the async save
+    await act(async () => {
+      vi.advanceTimersByTime(800); // Save time
+    });
+
+    expect(screen.getByText('Saved to Custom Room')).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1500); // Auto close
+    });
+
+    expect(onCloseMock).toHaveBeenCalled();
+  });
 });

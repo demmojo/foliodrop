@@ -502,6 +502,38 @@ describe('UploadFlow Component', () => {
     expect(global.fetch).toHaveBeenCalled();
   });
 
+  it('shows welcome back prompt and handles starting a new room', async () => {
+    localStorage.setItem('hdr_room_code', 'welcome-back-code');
+    
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+      if (url.includes('/api/v1/sessions/generate')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-room-123' }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as any);
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+
+    expect(screen.getByText('Welcome Back')).toBeInTheDocument();
+
+    const startNewBtn = screen.getByText('Start a New Room');
+    await act(async () => {
+      fireEvent.click(startNewBtn);
+    });
+
+    // Prompt should disappear and generate should be called
+    expect(screen.queryByText('Welcome Back')).not.toBeInTheDocument();
+    
+    await new Promise(r => setTimeout(r, 0));
+    
+    const generateCall = fetchSpy.mock.calls.find(call => String(call[0]).includes('/api/v1/sessions/generate'));
+    expect(generateCall).toBeTruthy();
+    
+    fetchSpy.mockRestore();
+  });
+
   it('handles Complete action in Processing Console to Review', async () => {
     await act(async () => {
       render(<UploadFlow />);
@@ -612,6 +644,67 @@ describe('UploadFlow Component', () => {
     fetchSpy.mockRestore();
   });
 
+  it('handles resume session via Resume button', async () => {
+    useJobStore.setState({ activeSessionId: null, flowState: 'IDLE' });
+    
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+      if (url.includes('/api/v1/jobs/active')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as any);
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
+    const resumeBtn = screen.getByTestId('resume-button');
+
+    await act(async () => {
+      fireEvent.change(sessionCodeInput, { target: { value: 'session-btn' } });
+    });
+
+    await act(async () => {
+      fireEvent.click(resumeBtn);
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+    
+    const activeJobsCall = fetchSpy.mock.calls.find(call => String(call[0]).includes('/api/v1/jobs/active?session_id=session-btn'));
+    expect(activeJobsCall).toBeTruthy();
+    
+    fetchSpy.mockRestore();
+  });
+
+  it('handles starting a new room', async () => {
+    useJobStore.setState({ activeSessionId: null, flowState: 'IDLE' });
+    
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+      if (url.includes('/api/v1/sessions/generate')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-room-123' }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as any);
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    const startNewBtn = screen.getByText('Start a new room');
+
+    await act(async () => {
+      fireEvent.click(startNewBtn);
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+    
+    const generateCall = fetchSpy.mock.calls.find(call => String(call[0]).includes('/api/v1/sessions/generate'));
+    expect(generateCall).toBeTruthy();
+    
+    fetchSpy.mockRestore();
+  });
+
   it('handles drag and drop overlay', async () => {
     // Reset state to ensure we are in IDLE
     useJobStore.setState({
@@ -624,41 +717,43 @@ describe('UploadFlow Component', () => {
       render(<UploadFlow />);
     });
     
-    // The component attaches a global event listener, let's trigger it
+    // Trigger dragover on window to show the overlay
     await act(async () => {
-      const event = new Event('dragenter', { bubbles: true });
-      Object.assign(event, { dataTransfer: { types: ['Files'] } });
+      const event = new Event('dragover', { bubbles: true });
       window.dispatchEvent(event);
     });
 
-    // The overlay is rendered based on isDragging state which is set by the hook
-    // It might need a bit of time or an explicit state update if the global event doesn't trigger it directly in jsdom
-    // Let's force the state for the test if the event didn't work
-    
-    const dragOverlay = screen.queryByTestId('drag-overlay');
-    if (!dragOverlay) {
-        // Fallback: the test environment might not fully support the global drag events in the same way, 
-        // we can still test the drop handler by interacting with the main dropzone container
-        const dropzone = screen.getByText('Import bracketed sets').parentElement!;
-        await act(async () => {
-            fireEvent.drop(dropzone, {
-                dataTransfer: { files: [] }
-            });
-        });
-    } else {
-        expect(dragOverlay).toBeInTheDocument();
+    let dragOverlay = screen.queryByTestId('drag-overlay');
+    expect(dragOverlay).toBeInTheDocument();
 
-        // Simulate drop on the overlay itself
-        await act(async () => {
-          fireEvent.drop(dragOverlay, {
-            dataTransfer: { files: [] }
-          });
-        });
-        
-        await waitFor(() => {
-            expect(screen.queryByTestId('drag-overlay')).not.toBeInTheDocument();
-        });
-    }
+    // Trigger dragleave to hide it
+    await act(async () => {
+      const event = new MouseEvent('dragleave', { bubbles: true, clientX: 0, clientY: 0 });
+      window.dispatchEvent(event);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('drag-overlay')).not.toBeInTheDocument();
+    });
+
+    // Trigger dragover again to show it
+    await act(async () => {
+      const event = new Event('dragover', { bubbles: true });
+      window.dispatchEvent(event);
+    });
+
+    dragOverlay = screen.getByTestId('drag-overlay');
+    
+    // Simulate drop on the overlay itself
+    await act(async () => {
+      fireEvent.drop(dragOverlay, {
+        dataTransfer: { files: [] }
+      });
+    });
+    
+    await waitFor(() => {
+        expect(screen.queryByTestId('drag-overlay')).not.toBeInTheDocument();
+    });
   });
 
   it('handles toast messages', async () => {
