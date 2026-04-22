@@ -423,7 +423,12 @@ export default function UploadFlow() {
       {isDragging && flowState === 'IDLE' && (
         <div 
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center transition-all duration-300"
-          onDrop={handleDrop}
+          onDrop={(e) => {
+             e.preventDefault();
+             e.stopPropagation();
+             handleDrop(e);
+          }}
+          data-testid="drag-overlay"
         >
           <div className="flex flex-col items-center gap-6 animate-in zoom-in-95 pointer-events-none">
             <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center border border-white/20 shadow-2xl shadow-white/5">
@@ -437,7 +442,7 @@ export default function UploadFlow() {
 
       {/* TOAST */}
       {toastMessage && (
-        <div className="fixed top-24 right-8 bg-surface border border-border text-foreground px-6 py-4 rounded-lg shadow-2xl z-50 animate-in slide-in-from-top-4 flex items-center gap-3">
+        <div data-testid="toast-message" className="fixed top-24 right-8 bg-surface border border-border text-foreground px-6 py-4 rounded-lg shadow-2xl z-50 animate-in slide-in-from-top-4 flex items-center gap-3">
           <Info className="w-5 h-5 text-amber-500" />
           <span className="text-sm font-medium">{toastMessage}</span>
         </div>
@@ -532,15 +537,34 @@ export default function UploadFlow() {
                 onClick={() => {
                   if (sessionCode) handleResumeSession(sessionCode);
                 }}
-                className="px-4 py-2 bg-foreground text-background rounded-lg text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                className="px-4 py-2 bg-foreground text-background rounded-lg text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all whitespace-nowrap"
               >
                 Resume
               </button>
             </div>
-            {sessionCodeError && <p className="text-xs text-amber-500 mt-1">{sessionCodeError}</p>}
+            {sessionCodeError && <p className="text-xs text-amber-500 mt-1" data-testid="session-code-error">{sessionCodeError}</p>}
             <p className="text-[11px] text-muted text-center max-w-[300px] mt-1">
               Start an upload with this code, or enter an existing one to resume. Codes expire in 30 days.
             </p>
+
+            <button
+              onClick={() => {
+                localStorage.removeItem('hdr_room_code');
+                setSessionCode('');
+                fetch(`${API_URL}/api/v1/sessions/generate`)
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data.code) {
+                      setSessionCode(data.code);
+                      localStorage.setItem('hdr_room_code', data.code);
+                    }
+                  })
+                  .catch(console.error);
+              }}
+              className="text-xs text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors mt-2"
+            >
+              Start a new room
+            </button>
 
             {recentSessions.length > 0 && (
               <div className="w-full mt-6 flex flex-col gap-2">
