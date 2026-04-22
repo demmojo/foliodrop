@@ -77,7 +77,7 @@ export default function SmartSaveSheet({
         {/* Header & Context */}
         <div className="flex items-start justify-between mb-6">
           <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Saving to workspace</p>
+            <p className="text-sm font-medium text-muted mb-1">Saving to workspace</p>
             <h3 className="text-lg font-semibold text-foreground line-clamp-1">
               {itemTitle}
             </h3>
@@ -85,7 +85,7 @@ export default function SmartSaveSheet({
           <button 
             onClick={onClose}
             disabled={saveState === 'saving'}
-            className="p-2 -mr-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            className="p-2 -mr-2 text-muted hover:text-foreground disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -94,8 +94,8 @@ export default function SmartSaveSheet({
         {/* Success State Takeover */}
         {saveState === 'success' ? (
           <div className="py-8 flex flex-col items-center justify-center animate-in fade-in duration-300">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
-              <Check className="w-6 h-6 text-green-600" />
+            <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center mb-3">
+              <Check className="w-6 h-6 text-success" />
             </div>
             <p className="text-foreground font-medium">Saved to {selectedTag}</p>
           </div>
@@ -106,13 +106,13 @@ export default function SmartSaveSheet({
             <div>
               <div className="flex items-center gap-1.5 mb-3">
                 {isOffline ? (
-                  <WifiOff className="w-4 h-4 text-gray-400" />
+                  <WifiOff className="w-4 h-4 text-muted" />
                 ) : aiState === 'error' ? (
-                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <AlertCircle className="w-4 h-4 text-error" />
                 ) : (
-                  <Sparkles className="w-4 h-4 text-gray-400" />
+                  <Sparkles className="w-4 h-4 text-muted" />
                 )}
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-foreground">
                   {isOffline ? 'Offline Mode' 
                     : aiState === 'error' ? 'Suggestions unavailable' 
                     : 'Suggested Folders'}
@@ -121,8 +121,8 @@ export default function SmartSaveSheet({
 
               {/* State: Offline / Error Fallback */}
               {(isOffline || aiState === 'error') && (
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <p className="text-sm text-gray-600 mb-3">
+                <div className="p-4 bg-muted/5 rounded-xl border border-border">
+                  <p className="text-sm text-muted mb-3">
                     {isOffline 
                       ? "You're offline. Save locally to your default folder or create a new one." 
                       : "We couldn't generate suggestions right now."}
@@ -131,7 +131,7 @@ export default function SmartSaveSheet({
                     onClick={() => handleSave("Default Folder")}
                     className="w-full py-2.5 px-4 bg-surface border border-border rounded-lg text-sm font-medium text-foreground hover:bg-background flex items-center justify-center gap-2"
                   >
-                    <FolderInput className="w-4 h-4 text-gray-500" />
+                    <FolderInput className="w-4 h-4 text-muted" />
                     Save to Default Folder
                   </button>
                 </div>
@@ -143,7 +143,7 @@ export default function SmartSaveSheet({
                   {[1, 2, 3].map((i) => (
                     <div 
                       key={i} 
-                      className="h-10 w-24 bg-gray-100 rounded-lg animate-pulse" 
+                      className="h-10 w-24 bg-muted/10 rounded-lg animate-pulse" 
                       style={{ animationDelay: `${i * 150}ms` }}
                     />
                   ))}
@@ -165,8 +165,8 @@ export default function SmartSaveSheet({
                         className={`
                           relative h-10 px-4 rounded-lg text-sm font-medium transition-all active:scale-95
                           ${isSavingThis 
-                            ? 'bg-gray-900 text-transparent' // Hide text to show spinner
-                            : 'bg-gray-100 text-foreground hover:bg-gray-200'}
+                            ? 'bg-foreground text-transparent' // Hide text to show spinner
+                            : 'bg-muted/10 text-foreground hover:bg-muted/20'}
                           ${isDisabled ? 'opacity-40 cursor-not-allowed active:scale-100' : ''}
                         `}
                       >
@@ -184,7 +184,7 @@ export default function SmartSaveSheet({
             </div>
 
             {/* Escape Hatch: Manual Entry */}
-            <div className="pt-4 border-t border-gray-100">
+            <div className="pt-4 border-t border-border">
               <label htmlFor="custom-tag" className="sr-only">Create custom folder</label>
               <div className="flex gap-2">
                 <input
@@ -194,7 +194,7 @@ export default function SmartSaveSheet({
                   onChange={(e) => setCustomTag(e.target.value)}
                   placeholder="Or create a new folder..."
                   disabled={saveState === 'saving'}
-                  className="flex-1 bg-gray-50 border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-900 disabled:opacity-50"
+                  className="flex-1 bg-muted/5 border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground disabled:opacity-50"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSave(customTag);
                   }}

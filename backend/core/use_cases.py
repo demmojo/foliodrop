@@ -19,35 +19,58 @@ class FinalizeJobUseCase:
         self.task_queue = task_queue
         self.db = db
 
-    def execute(self, session_id: str, idempotency_key: str, files_data: List[dict]) -> dict:
-        from backend.core.grouping import group_photos, Photo, ExifData
+    def execute(self, session_id: str, idempotency_key: str, files_data: Optional[List[dict]] = None, groups_data: Optional[List[dict]] = None) -> dict:
         import datetime
         import uuid
         
-        photos = []
-        for file in files_data:
-            dt = datetime.datetime.fromtimestamp(file["timestamp"] / 1000.0, tz=datetime.timezone.utc)
-            photos.append(Photo(id=file["name"], capture_time=dt, exif=ExifData()))
-            
-        groups = group_photos(photos)
         job_ids = []
         new_jobs = []
         
-        for idx, group in enumerate(groups):
-            room_name = f"Scene {idx + 1}"
-            filenames = [p.id for p in group]
+        if groups_data:
+            # #region agent log
+            import json, time
+            try:
+                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
+                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_GROUPS","location":"FinalizeJobUseCase:execute","message":"received groups_data","data":{"num_groups":len(groups_data), "sizes": [len(g.get("files", [])) for g in groups_data]},"timestamp":int(time.time()*1000)}) + "\n")
+            except Exception: pass
+            # #endregion
+            for idx, group in enumerate(groups_data):
+                room_name = group.get("name", f"Scene {idx + 1}")
+                filenames = group.get("files", [])
+                
+                if not filenames:
+                    continue
+                    
+                group_job_id = f"job_{uuid.uuid4().hex[:12]}"
+                group_idemp_key = f"{idempotency_key}_group_{idx}"
+                
+                existing_job = self.db.get_job_by_idempotency_key(group_idemp_key)
+                if existing_job:
+                    job_ids.append(existing_job["id"])
+                    continue
+                new_jobs.append((group_job_id, group_idemp_key, room_name, filenames))
+                
+        elif files_data:
+            from backend.core.grouping import group_photos, Photo, ExifData
+            photos = []
+            for file in files_data:
+                dt = datetime.datetime.fromtimestamp(file["timestamp"] / 1000.0, tz=datetime.timezone.utc)
+                photos.append(Photo(id=file["name"], capture_time=dt, exif=ExifData()))
+                
+            groups = group_photos(photos)
             
-            # Create a deterministic sub-key for each group if needed, or just one Job ID per finalize call?
-            # A single upload might spawn multiple room groups. We can make a job per group.
-            group_job_id = f"job_{uuid.uuid4().hex[:12]}"
-            group_idemp_key = f"{idempotency_key}_group_{idx}"
-            
-            # Check if this sub-job already exists
-            existing_job = self.db.get_job_by_idempotency_key(group_idemp_key)
-            if existing_job:
-                job_ids.append(existing_job["id"])
-                continue
-            new_jobs.append((group_job_id, group_idemp_key, room_name, filenames))
+            for idx, group in enumerate(groups):
+                room_name = f"Scene {idx + 1}"
+                filenames = [p.id for p in group]
+                
+                group_job_id = f"job_{uuid.uuid4().hex[:12]}"
+                group_idemp_key = f"{idempotency_key}_group_{idx}"
+                
+                existing_job = self.db.get_job_by_idempotency_key(group_idemp_key)
+                if existing_job:
+                    job_ids.append(existing_job["id"])
+                    continue
+                new_jobs.append((group_job_id, group_idemp_key, room_name, filenames))
                 
         if new_jobs:
             if not self.db.increment_quota_usage("default", len(new_jobs)):
@@ -58,7 +81,7 @@ class FinalizeJobUseCase:
                 self.task_queue.enqueue_job(group_job_id, session_id, room_name, filenames)
                 job_ids.append(group_job_id)
             
-        return {"status": "enqueued", "job_ids": job_ids, "tasks_count": len(groups)}
+        return {"status": "enqueued", "job_ids": job_ids, "tasks_count": len(new_jobs)}
 
 def downsample_for_vlm(image_bytes: bytes, max_dim: int = 1080) -> bytes:
     import cv2

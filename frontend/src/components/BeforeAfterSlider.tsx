@@ -14,6 +14,22 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
   const [sliderPosition, setSliderPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const beforeImgRef = useRef<HTMLImageElement>(null);
+  const afterImgRef = useRef<HTMLImageElement>(null);
+  const [beforeLoaded, setBeforeLoaded] = useState(false);
+  const [afterLoaded, setAfterLoaded] = useState(false);
+
+  const imagesLoaded = beforeLoaded && afterLoaded;
+
+  // Check if images are already cached/loaded when mounted
+  useEffect(() => {
+    if (beforeImgRef.current?.complete) {
+      setBeforeLoaded(true);
+    }
+    if (afterImgRef.current?.complete) {
+      setAfterLoaded(true);
+    }
+  }, [beforeUrl, afterUrl]);
 
   const handleMove = (clientX: number) => {
     if (!containerRef.current || !isDragging) return;
@@ -67,37 +83,55 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
   return (
     <div 
       ref={containerRef}
-      className={clsx("relative w-full h-full overflow-hidden select-none", className)}
+      className={clsx("relative w-full h-full overflow-hidden select-none bg-black/10", className)}
       onMouseDown={startDrag}
       onTouchStart={startDrag}
     >
-      {/* After Image (Bottom Layer) */}
+      {!imagesLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center z-30">
+          <div className="w-8 h-8 border-4 border-muted border-t-accent rounded-full animate-spin"></div>
+        </div>
+      )}
+      
+      {/* Before Image (Bottom Layer) */}
       <img 
-        src={afterUrl} 
-        alt="Fused HDR Result"
-        className={clsx("absolute inset-0 w-full h-full pointer-events-none", objectFit === 'cover' ? 'object-cover' : 'object-contain')}
-        loading="lazy"
+        ref={beforeImgRef}
+        src={beforeUrl} 
+        alt="Original Exposure"
+        onLoad={() => setBeforeLoaded(true)}
+        className={clsx(
+          "absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-300",
+          objectFit === 'cover' ? 'object-cover' : 'object-contain',
+          imagesLoaded ? 'opacity-100' : 'opacity-0'
+        )}
       />
       
-      {/* Before Image (Top Layer) - Clipped */}
+      {/* After Image (Top Layer) - Clipped to the right */}
       <div 
-        className="absolute inset-0 w-full h-full"
-        style={{ clipPath: `polygon(0 0, ${sliderPosition}% 0, ${sliderPosition}% 100%, 0 100%)` }}
+        className={clsx(
+          "absolute inset-0 w-full h-full transition-opacity duration-300",
+          imagesLoaded ? 'opacity-100' : 'opacity-0'
+        )}
+        style={{ clipPath: `polygon(${sliderPosition}% 0, 100% 0, 100% 100%, ${sliderPosition}% 100%)` }}
       >
         <img 
-          src={beforeUrl} 
-          alt="Original Exposure"
+          ref={afterImgRef}
+          src={afterUrl} 
+          alt="Fused HDR Result"
+          onLoad={() => setAfterLoaded(true)}
           className={clsx(
             "absolute inset-0 w-full h-full pointer-events-none",
             objectFit === 'cover' ? 'object-cover' : 'object-contain'
           )}
-          loading="lazy"
         />
       </div>
 
       {/* Slider Handle */}
       <div 
-        className="absolute top-0 bottom-0 w-1 bg-surface cursor-ew-resize hover:bg-accent transition-colors duration-200 z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)] flex items-center justify-center -ml-0.5"
+        className={clsx(
+          "absolute top-0 bottom-0 w-1 bg-surface cursor-ew-resize hover:bg-accent transition-all duration-300 z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)] flex items-center justify-center -ml-0.5",
+          imagesLoaded ? 'opacity-100' : 'opacity-0'
+        )}
         style={{ left: `${sliderPosition}%` }}
       >
         <div className="w-8 h-8 rounded-full bg-surface shadow-md border border-border flex items-center justify-center">
@@ -108,10 +142,10 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
       </div>
       
       {/* Labels */}
-      <div className="absolute top-4 left-4 z-20">
+      <div className={clsx("absolute top-4 left-4 z-20 pointer-events-none transition-opacity duration-300", imagesLoaded ? 'opacity-100' : 'opacity-0')}>
         <span className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 text-[10px] uppercase tracking-widest font-mono rounded-sm">{t('before')}</span>
       </div>
-      <div className="absolute top-4 right-4 z-20">
+      <div className={clsx("absolute top-4 right-4 z-20 pointer-events-none transition-opacity duration-300", imagesLoaded ? 'opacity-100' : 'opacity-0')}>
         <span className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 text-[10px] uppercase tracking-widest font-mono rounded-sm">{t('after')}</span>
       </div>
     </div>

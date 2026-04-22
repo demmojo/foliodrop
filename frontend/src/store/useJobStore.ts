@@ -5,7 +5,7 @@ export interface ProcessedHDR {
   url: string;
   thumbUrl?: string;
   originalUrl?: string; 
-  roomName: string;
+  sceneName: string;
   status: string;
   isFlagged?: boolean;
   vlmReport?: any;
@@ -193,7 +193,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
                   url: jobData.result.url,
                   thumbUrl: jobData.result.thumb_url || jobData.result.url,
                   originalUrl: jobData.result.original_url || jobData.result.original_blob_path,
-                  roomName: jobData.result.room,
+                  sceneName: jobData.result.room,
                   status: 'NEEDS_REVIEW',
                   isFlagged: jobData.result.isFlagged,
                   vlmReport: jobData.result.vlmReport
@@ -271,7 +271,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
                     url: jobData.result.url,
                     thumbUrl: jobData.result.thumb_url || jobData.result.url,
                     originalUrl: jobData.result.original_url || jobData.result.original_blob_path, // If we get signed URL for this it should be mapped
-                    roomName: jobData.result.room,
+                    sceneName: jobData.result.room,
                     status: 'NEEDS_REVIEW', // Manual Default as per plan
                     isFlagged: jobData.result.isFlagged,
                     vlmReport: jobData.result.vlmReport

@@ -7,6 +7,8 @@
   --color-accent: var(--accent);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
   --color-muted: var(--muted);
   --color-border: var(--border);
 
@@ -21,14 +23,16 @@
 }
 
 :root {
-  --background: #fafafa; /* Zinc-50 */
-  --surface: #ffffff; /* Pure White */
-  --foreground: #18181b; /* Zinc-900 */
-  --accent: #2563EB; /* Crisp Blue */
-  --success: #16a34a; /* Green-600 */
-  --warning: #ea580c; /* Orange-600 */
-  --muted: #52525b; /* Zinc-600 */
-  --border: #e4e4e7; /* Zinc-200 */
+  --background: #FFFFFF;
+  --surface: #F9F9F8;
+  --foreground: #1A1A1A;
+  --accent: #9A8C78;
+  --success: #3D5A40;
+  --warning: #8B4A36;
+  --error: #9C3838;
+  --info: #3A5B74;
+  --muted: #828282;
+  --border: #E8E8E8;
 
   background-color: var(--color-background);
   color: var(--color-foreground);
@@ -37,14 +41,16 @@
 }
 
 .dark {
-  --background: #09090b; /* Zinc-950 */
-  --surface: #18181b; /* Zinc-900 */
-  --foreground: #fafafa; /* Zinc-50 */
-  --accent: #3b82f6; /* Blue-500 */
-  --success: #22c55e; /* Green-500 */
-  --warning: #f97316; /* Orange-500 */
-  --muted: #a1a1aa; /* Zinc-400 */
-  --border: #27272a; /* Zinc-800 */
+  --background: #0D0D0C;
+  --surface: #141413;
+  --foreground: #EAEAEA;
+  --accent: #B0A084;
+  --success: #4E6E50;
+  --warning: #B36B56;
+  --error: #C15C5C;
+  --info: #5B82A1;
+  --muted: #8A8A8A;
+  --border: #2A2A2A;
 }
 
 body {

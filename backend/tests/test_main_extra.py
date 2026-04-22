@@ -39,7 +39,7 @@ def test_validate_session_short():
 def test_validate_session_valid():
     db_mock = MagicMock()
     db_mock.check_session_code_availability.return_value = True
-    
+
     from backend.main import get_database
     app.dependency_overrides[get_database] = lambda: db_mock
     response = client.post("/api/v1/sessions/validate", json={"code": "longenoughcode"})
@@ -47,30 +47,13 @@ def test_validate_session_valid():
     assert response.json()["valid"] is True
     app.dependency_overrides.clear()
 
-def test_validate_session_invalid_suggested():
+def test_validate_session_valid_even_if_taken():
     db_mock = MagicMock()
-    # First check fails, second check (for suggestion) succeeds
-    db_mock.check_session_code_availability.side_effect = [False, True]
-    
-    from backend.main import get_database
-    app.dependency_overrides[get_database] = lambda: db_mock
-    response = client.post("/api/v1/sessions/validate", json={"code": "longenoughcode"})
-    assert response.status_code == 200
-    data = response.json()
-    assert data["valid"] is False
-    assert data["suggested"] is not None
-    app.dependency_overrides.clear()
-
-def test_validate_session_invalid_no_suggested():
-    db_mock = MagicMock()
-    # Always fails
     db_mock.check_session_code_availability.return_value = False
-    
+
     from backend.main import get_database
     app.dependency_overrides[get_database] = lambda: db_mock
     response = client.post("/api/v1/sessions/validate", json={"code": "longenoughcode"})
     assert response.status_code == 200
-    data = response.json()
-    assert data["valid"] is False
-    assert data["suggested"] is None
+    assert response.json()["valid"] is True
     app.dependency_overrides.clear()

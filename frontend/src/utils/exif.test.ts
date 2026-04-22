@@ -111,6 +111,55 @@ describe('exif utils', () => {
       expect(groups[1].previewUrl).toBe('url4');
     });
 
+    it('should group photos based on repeating exposure compensation sequence', () => {
+      const photos = [
+        { file: new File([''], '1.jpg'), captureTime: 1000, exposureCompensation: -2, previewUrl: 'url1' },
+        { file: new File([''], '2.jpg'), captureTime: 1100, exposureCompensation: 0, previewUrl: 'url2' },
+        { file: new File([''], '3.jpg'), captureTime: 1200, exposureCompensation: 2, previewUrl: 'url3' },
+        { file: new File([''], '4.jpg'), captureTime: 1300, exposureCompensation: -2, previewUrl: 'url4' },
+        { file: new File([''], '5.jpg'), captureTime: 1400, exposureCompensation: 0, previewUrl: 'url5' },
+        { file: new File([''], '6.jpg'), captureTime: 1500, exposureCompensation: 2, previewUrl: 'url6' },
+      ] as any;
+
+      // Small gap < 2500ms should still be split because of repeating sequence
+      const groups = groupPhotosIntoScenes(photos);
+      
+      expect(groups).toHaveLength(2);
+      expect(groups[0].photos).toHaveLength(3);
+      expect(groups[1].photos).toHaveLength(3);
+    });
+
+    it('should group photos in chunks of 5 when captureTime is exactly same and no exposure data is available', () => {
+      const photos = Array.from({ length: 12 }, (_, i) => ({
+        file: new File([''], `${i.toString().padStart(4, '0')}.jpg`),
+        captureTime: 1000, // all exactly the same
+        previewUrl: `url${i}`
+      })) as any;
+
+      const groups = groupPhotosIntoScenes(photos);
+      
+      // 12 photos -> 5 + 5 + 2
+      expect(groups).toHaveLength(3);
+      expect(groups[0].photos).toHaveLength(5);
+      expect(groups[1].photos).toHaveLength(5);
+      expect(groups[2].photos).toHaveLength(2);
+    });
+
+    it('should sort photos by filename when captureTime is identical', () => {
+      const photos = [
+        { file: new File([''], 'c.jpg'), captureTime: 1000, previewUrl: 'urlc' },
+        { file: new File([''], 'a.jpg'), captureTime: 1000, previewUrl: 'urla' },
+        { file: new File([''], 'b.jpg'), captureTime: 1000, previewUrl: 'urlb' },
+      ] as any;
+
+      const groups = groupPhotosIntoScenes(photos);
+      
+      expect(groups).toHaveLength(1);
+      expect(groups[0].photos[0].file.name).toBe('a.jpg');
+      expect(groups[0].photos[1].file.name).toBe('b.jpg');
+      expect(groups[0].photos[2].file.name).toBe('c.jpg');
+    });
+
     it('should return empty array for empty photos array', () => {
       expect(groupPhotosIntoScenes([])).toHaveLength(0);
     });

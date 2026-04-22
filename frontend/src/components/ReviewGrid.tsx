@@ -63,12 +63,12 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
       {/* REVIEW QUEUE (LEFT ON DESKTOP, TOP ON MOBILE) */}
       {reviewQueue.length > 0 && (
         <div className="w-full md:w-1/3 lg:w-1/4 border-b md:border-b-0 md:border-r border-border p-4 overflow-y-auto max-h-[45dvh] md:max-h-none bg-surface flex-shrink-0">
-          <h3 className="text-xs uppercase tracking-widest text-amber-500 mb-6 font-semibold">
+          <h3 className="text-xs uppercase tracking-widest text-warning mb-6 font-semibold">
             Needs Review ({reviewQueue.length})
           </h3>
           <div className="flex flex-col gap-6">
             {reviewQueue.map((photo) => (
-              <div key={photo.id} className="group flex flex-col gap-2 p-3 bg-background rounded-md border border-border hover:border-amber-500/50 transition-colors">
+              <div key={photo.id} className="group flex flex-col gap-2 p-3 bg-background rounded-md border border-border hover:border-warning/50 transition-colors">
                 <div 
                    className="w-full aspect-[3/2] bg-black cursor-pointer overflow-hidden rounded relative"
                    onClick={() => setLoupeImage(photo)}
@@ -76,7 +76,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                    {photo.thumbUrl || photo.url ? (
                        <img 
                           src={photo.thumbUrl || photo.url} 
-                          alt={photo.roomName || 'Room Image'} 
+                          alt={photo.sceneName || 'Room Image'} 
                           onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '')}
                           className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
                        />
@@ -89,10 +89,10 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                 </div>
                 
                 <div className="flex justify-between items-center mt-1">
-                    <span className="text-sm font-medium truncate pr-2">{photo.roomName}</span>
+                    <span className="text-sm font-medium truncate pr-2">{photo.sceneName}</span>
                     <div className="flex gap-2 flex-shrink-0">
                         {onOverrideWithManualEdit && (
-                            <label className="flex items-center justify-center text-xs px-3 py-2 sm:px-2 sm:py-1 min-h-[44px] sm:min-h-0 rounded bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 hover:bg-blue-500/20 dark:hover:bg-blue-500/40 transition-colors cursor-pointer" title="Override with Manual Edit">
+                            <label className="flex items-center justify-center text-xs px-3 py-2 sm:px-2 sm:py-1 min-h-[44px] sm:min-h-0 rounded bg-info/10 text-info hover:bg-info/20 transition-colors cursor-pointer" title="Override with Manual Edit">
                                 ✏️ Override
                                 <input 
                                     type="file" 
@@ -112,7 +112,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                             </button>
                         )}
                         {onDiscardItem && (
-                            <button onClick={() => onDiscardItem(photo.id)} className="flex items-center justify-center text-xs px-3 py-2 sm:px-2 sm:py-1 min-h-[44px] sm:min-h-0 rounded bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-300 hover:bg-red-500/20 dark:hover:bg-red-500/40 transition-colors" title="Discard Image">
+                            <button onClick={() => onDiscardItem(photo.id)} className="flex items-center justify-center text-xs px-3 py-2 sm:px-2 sm:py-1 min-h-[44px] sm:min-h-0 rounded bg-error/10 text-error hover:bg-error/20 transition-colors" title="Discard Image">
                                 🗑️ Drop
                             </button>
                         )}
@@ -123,10 +123,10 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     <details className="mt-1">
                         <summary className="text-xs text-muted cursor-pointer hover:text-foreground outline-none list-none">
                             <span className="flex items-center gap-1">
-                                <span className="text-amber-500/80">⚠️ QA Note</span> (Score: {photo.vlmReport.window_score || 'N/A'})
+                                <span className="text-warning/80">⚠️ QA Note</span> (Score: {photo.vlmReport.window_score || 'N/A'})
                             </span>
                         </summary>
-                        <p className="text-[10px] text-muted leading-relaxed mt-2 p-2 bg-foreground/5 rounded border-l-2 border-amber-500/30">
+                        <p className="text-[10px] text-muted leading-relaxed mt-2 p-2 bg-foreground/5 rounded border-l-2 border-warning/30">
                             {photo.vlmReport.reason || photo.vlmReport.window_reasoning || JSON.stringify(photo.vlmReport)}
                         </p>
                     </details>
@@ -159,7 +159,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     {(photo.thumbUrl || photo.url) && (
                         <img 
                             src={photo.thumbUrl || photo.url} 
-                            alt={photo.roomName || 'Room Image'} 
+                            alt={photo.sceneName || 'Room Image'} 
                             onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '')}
                             className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
                         />
@@ -168,7 +168,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                         <span className="text-white text-xs uppercase tracking-widest bg-black/60 px-2 py-1 rounded shadow-sm backdrop-blur-sm relative z-10 hidden group-hover:block">Inspect</span>
                     </div>
                  </div>
-                 <div className="text-xs text-muted font-medium px-1">{photo.roomName}</div>
+                 <div className="text-xs text-muted font-medium px-1">{photo.sceneName}</div>
                </div>
             ))}
          </div>
@@ -184,9 +184,9 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
           <div className="fixed inset-0 z-50 bg-black/95 flex flex-col dark text-foreground">
               <div className="flex justify-between items-center p-4 border-b border-white/10">
                   <div className="flex items-center gap-4">
-                      <span className="text-white font-medium truncate max-w-[200px] md:max-w-none">{loupeImage.roomName}</span>
+                      <span className="text-white font-medium truncate max-w-[200px] md:max-w-none">{loupeImage.sceneName}</span>
                       {(loupeImage.isFlagged || loupeImage.status === 'NEEDS_REVIEW') && (
-                          <span className="hidden sm:inline-block text-xs text-amber-500 border border-amber-500/30 bg-amber-500/10 px-2 py-1 rounded">Needs Review</span>
+                          <span className="hidden sm:inline-block text-xs text-warning border border-warning/30 bg-warning/10 px-2 py-1 rounded">Needs Review</span>
                       )}
                   </div>
                   <button onClick={() => setLoupeImage(null)} className="text-white/60 hover:text-white text-3xl p-2 leading-none">&times;</button>
@@ -201,7 +201,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
               </div>
               <div className="p-4 border-t border-white/10 flex justify-center gap-2 sm:gap-4 bg-[#111] pb-safe">
                  {onOverrideWithManualEdit && (
-                     <label className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none text-center cursor-pointer">
+                     <label className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-info/20 hover:bg-info/40 text-info rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none text-center cursor-pointer">
                          Override
                          <input 
                              type="file" 
@@ -227,7 +227,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                  {onDiscardItem && (
                      <button 
                         onClick={() => { onDiscardItem(loupeImage.id); setLoupeImage(null); }}
-                        className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-red-500/20 hover:bg-red-500/40 text-red-300 rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
+                        className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-error/20 hover:bg-error/40 text-error rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
                      >
                          Discard
                      </button>

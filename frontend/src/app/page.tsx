@@ -14,7 +14,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background font-sans text-foreground selection:bg-accent selection:text-white flex flex-col transition-colors duration-300">
       {/* Editorial Header */}
-      <header className="w-full flex justify-between items-center px-4 py-4 md:py-6 md:px-8 z-40 relative border-b border-border dark:border-zinc-800">
+      <header className="w-full flex justify-between items-center px-4 py-4 md:py-6 md:px-8 z-40 relative border-b border-border">
         <div className="flex gap-3 md:gap-4 items-baseline relative z-40">
           <h1 className="text-lg md:text-xl lg:text-2xl font-bold tracking-tight m-0 leading-none">{t('folio')}</h1>
           <span className="font-mono text-[9px] md:text-[10px] uppercase tracking-widest px-1.5 py-0.5 bg-foreground text-background rounded-sm">{t('beta')}</span>

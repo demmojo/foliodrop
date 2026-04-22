@@ -15,7 +15,7 @@ export function ThemeToggle() {
   }, [])
 
   if (!mounted) {
-    return <div className="w-14 h-8 rounded-full bg-border dark:bg-zinc-800 animate-pulse" />
+    return <div className="w-14 h-8 rounded-full bg-border animate-pulse" />
   }
 
   const isDark = resolvedTheme === 'dark'
@@ -25,7 +25,7 @@ export function ThemeToggle() {
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={clsx(
         "relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
-        isDark ? "bg-zinc-700" : "bg-zinc-300"
+        isDark ? "bg-border" : "bg-border"
       )}
       aria-label="Toggle dark mode"
     >
@@ -37,9 +37,9 @@ export function ThemeToggle() {
         )}
       >
         {isDark ? (
-          <Moon className="h-3.5 w-3.5 text-zinc-300" />
+          <Moon className="h-3.5 w-3.5 text-muted" />
         ) : (
-          <Sun className="h-3.5 w-3.5 text-zinc-600" />
+          <Sun className="h-3.5 w-3.5 text-muted" />
         )}
       </span>
     </button>

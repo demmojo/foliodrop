@@ -1,0 +1,40 @@
+{"sessionId": "1f05a0", "hypothesisId": "H2", "location": "generate_session:start", "message": "generating session code", "data": {}, "timestamp": 1776854876033}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "seoul37", "is_avail": true, "attempt": 1}, "timestamp": 1776854876033}
+{"sessionId": "1f05a0", "hypothesisId": "H2", "location": "generate_session:start", "message": "generating session code", "data": {}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "milan91", "is_avail": false, "attempt": 1}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "seoul75", "is_avail": false, "attempt": 2}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "otter53", "is_avail": false, "attempt": 3}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "seoul56", "is_avail": false, "attempt": 4}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "lima77", "is_avail": false, "attempt": 5}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "prague92", "is_avail": false, "attempt": 6}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "swan77", "is_avail": false, "attempt": 7}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "quokka61", "is_avail": false, "attempt": 8}, "timestamp": 1776854876038}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "owl655", "is_avail": false, "attempt": 9}, "timestamp": 1776854876039}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "roman40", "is_avail": false, "attempt": 10}, "timestamp": 1776854876039}
+{"sessionId": "1f05a0", "hypothesisId": "H2", "location": "generate_session:fail", "message": "failed to generate code after 10 attempts", "data": {}, "timestamp": 1776854876039}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:start", "message": "validating code", "data": {"code": "short"}, "timestamp": 1776854876044}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:len", "message": "code too short", "data": {"code": "short", "suggested": "oslo13"}, "timestamp": 1776854876044}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:start", "message": "validating code", "data": {"code": "longenoughcode"}, "timestamp": 1776854876050}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:check", "message": "check availability", "data": {"code": "longenoughcode", "is_avail": true}, "timestamp": 1776854876050}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:start", "message": "validating code", "data": {"code": "longenoughcode"}, "timestamp": 1776854876055}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:check", "message": "check availability", "data": {"code": "longenoughcode", "is_avail": false}, "timestamp": 1776854876055}
+{"sessionId": "1f05a0", "hypothesisId": "H2", "location": "generate_session:start", "message": "generating session code", "data": {}, "timestamp": 1776854935715}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "rome96", "is_avail": true, "attempt": 1}, "timestamp": 1776854935716}
+{"sessionId": "1f05a0", "hypothesisId": "H2", "location": "generate_session:start", "message": "generating session code", "data": {}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "lynx54", "is_avail": false, "attempt": 1}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "prague13", "is_avail": false, "attempt": 2}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "panda36", "is_avail": false, "attempt": 3}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "koala41", "is_avail": false, "attempt": 4}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "prague39", "is_avail": false, "attempt": 5}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "chalet97", "is_avail": false, "attempt": 6}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "venice28", "is_avail": false, "attempt": 7}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "swan38", "is_avail": false, "attempt": 8}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "rome10", "is_avail": false, "attempt": 9}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H1", "location": "generate_session:loop", "message": "checked code", "data": {"code": "tudor47", "is_avail": false, "attempt": 10}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H2", "location": "generate_session:fail", "message": "failed to generate code after 10 attempts", "data": {}, "timestamp": 1776854935721}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:start", "message": "validating code", "data": {"code": "short"}, "timestamp": 1776854935727}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:len", "message": "code too short", "data": {"code": "short", "suggested": "tokyo55"}, "timestamp": 1776854935727}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:start", "message": "validating code", "data": {"code": "longenoughcode"}, "timestamp": 1776854935732}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:check", "message": "check availability", "data": {"code": "longenoughcode", "is_avail": true}, "timestamp": 1776854935732}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:start", "message": "validating code", "data": {"code": "longenoughcode"}, "timestamp": 1776854935737}
+{"sessionId": "1f05a0", "hypothesisId": "H4", "location": "validate_session:check", "message": "check availability", "data": {"code": "longenoughcode", "is_avail": false}, "timestamp": 1776854935737}

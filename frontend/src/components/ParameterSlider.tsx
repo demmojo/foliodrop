@@ -26,14 +26,14 @@ export default function ParameterSlider({ label, min, max, value, ghostValue, on
 
   return (
     <div className="flex flex-col gap-1 w-full mb-3">
-      <div className="flex justify-between items-center text-[9px] font-mono uppercase tracking-widest text-zinc-400 mb-1">
+      <div className="flex justify-between items-center text-[9px] font-mono uppercase tracking-widest text-muted mb-1">
         <span>{label}</span>
-        <span className={clsx(isHallucinated ? "text-red-400" : "text-zinc-300")}>
+        <span className={clsx(isHallucinated ? "text-error" : "text-foreground")}>
           {value.toFixed(2)}
         </span>
       </div>
       <div className="relative h-6 flex items-center group">
-        <div className="absolute w-full h-1 bg-[#404040] rounded-sm overflow-hidden">
+        <div className="absolute w-full h-1 bg-border rounded-sm overflow-hidden">
            <div 
              className="h-full bg-accent/50"
              style={{ width: `${currentPercent}%` }}
@@ -43,7 +43,7 @@ export default function ParameterSlider({ label, min, max, value, ghostValue, on
         {/* Ghost Marker (The hallucination) */}
         {ghostPercent !== undefined && isHallucinated && (
           <div 
-            className="absolute w-0.5 h-3 bg-red-500/70 -ml-[1px] pointer-events-none z-0"
+            className="absolute w-0.5 h-3 bg-error/70 -ml-[1px] pointer-events-none z-0"
             style={{ left: `${ghostPercent}%` }}
             title={`VLM original value: ${ghostValue}`}
           />
@@ -62,7 +62,7 @@ export default function ParameterSlider({ label, min, max, value, ghostValue, on
         
         {/* Visual Handle */}
         <div 
-          className="absolute w-1.5 h-3.5 bg-zinc-300 rounded-[1px] shadow-sm -ml-[3px] pointer-events-none z-10 group-hover:bg-white transition-colors"
+          className="absolute w-1.5 h-3.5 bg-muted rounded-[1px] shadow-sm -ml-[3px] pointer-events-none z-10 group-hover:bg-foreground transition-colors"
           style={{ left: `${currentPercent}%` }}
         />
       </div>

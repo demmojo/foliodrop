@@ -57,9 +57,14 @@ export async function parsePhotoMetadata(files: File[]): Promise<PhotoMeta[]> {
   return Promise.all(metaPromises);
 }
 
-export function groupPhotosIntoScenes(photos: PhotoMeta[], maxGapMs: number = 10000): PhotoGroup[] {
-  // Sort photos by capture time
-  const sorted = [...photos].sort((a, b) => a.captureTime - b.captureTime);
+export function groupPhotosIntoScenes(photos: PhotoMeta[], maxGapMs: number = 2500): PhotoGroup[] {
+  // Sort photos by capture time, then by filename
+  const sorted = [...photos].sort((a, b) => {
+    if (a.captureTime !== b.captureTime) {
+      return a.captureTime - b.captureTime;
+    }
+    return a.file.name.localeCompare(b.file.name);
+  });
   
   const groups: PhotoGroup[] = [];
   let currentGroup: PhotoMeta[] = [];
@@ -73,9 +78,30 @@ export function groupPhotosIntoScenes(photos: PhotoMeta[], maxGapMs: number = 10
       const lastPhoto = currentGroup[currentGroup.length - 1];
       const gap = photo.captureTime - lastPhoto.captureTime;
       
-      // If the gap between photos is larger than maxGapMs (10 seconds),
-      // we assume it's a new scene.
+      let isNewScene = false;
+
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ca7b1'},body:JSON.stringify({sessionId:'8ca7b1',hypothesisId:'H_GROUPING',location:'exif.ts:grouping',message:'evaluating photo for new scene',data:{fileName: photo.file.name, gap, currentGroupLen: currentGroup.length, exposureComp: photo.exposureCompensation, hasExifTime: photo.captureTime !== photo.file.lastModified},timestamp:Date.now()})}).catch(()=>{});
+      } catch(e) {}
+      // #endregion
+
+      // 1. Time gap > 2.5s usually means a new bracketed set
       if (gap > maxGapMs) {
+        isNewScene = true;
+      }
+      // 2. If gap is very small but exposure compensation repeats, it's a new set
+      else if (photo.exposureCompensation !== undefined && currentGroup.length >= 3) {
+         if (photo.exposureCompensation === currentGroup[0].exposureCompensation) {
+            isNewScene = true;
+         }
+      }
+      // 3. Fallback: if we have 0 gap and no exposure data, chunk by 5
+      else if (gap === 0 && currentGroup.length >= 5 && photo.exposureCompensation === undefined) {
+         isNewScene = true;
+      }
+
+      if (isNewScene) {
         groups.push({
           id: crypto.randomUUID(),
           photos: currentGroup,

@@ -6,14 +6,14 @@ describe('useImageStore', () => {
     // Reset state before each test
     useImageStore.setState({
       roomGroups: [],
-      activeRoomId: null,
+      activeSessionId: null,
     });
   });
 
   it('should initialize with empty state', () => {
     const state = useImageStore.getState();
     expect(state.roomGroups).toEqual([]);
-    expect(state.activeRoomId).toBeNull();
+    expect(state.activeSessionId).toBeNull();
   });
 
   it('should add a file to a new group', () => {
@@ -70,6 +70,6 @@ describe('useImageStore', () => {
     useImageStore.getState().setActiveRoom(groupId);
 
     const state = useImageStore.getState();
-    expect(state.activeRoomId).toBe(groupId);
+    expect(state.activeSessionId).toBe(groupId);
   });
 });

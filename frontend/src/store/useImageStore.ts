@@ -10,7 +10,7 @@ interface RoomGroup {
 
 interface ImageParamsState {
   roomGroups: RoomGroup[];
-  activeRoomId: string | null;
+  activeSessionId: string | null;
   addFileToGroup: (file: File, groupName: string) => void;
   updateGroupStatus: (groupId: string, status: RoomGroup['status']) => void;
   setActiveRoom: (groupId: string) => void;
@@ -18,7 +18,7 @@ interface ImageParamsState {
 
 export const useImageStore = create<ImageParamsState>((set) => ({
   roomGroups: [],
-  activeRoomId: null,
+  activeSessionId: null,
   addFileToGroup: (file, groupName) => set((state) => {
     // Very basic auto-grouping simulation
     const existingGroup = state.roomGroups.find(g => g.name === groupName);
@@ -43,5 +43,5 @@ export const useImageStore = create<ImageParamsState>((set) => ({
       g.id === groupId ? { ...g, status } : g
     )
   })),
-  setActiveRoom: (groupId) => set({ activeRoomId: groupId }),
+  setActiveRoom: (groupId) => set({ activeSessionId: groupId }),
 }));

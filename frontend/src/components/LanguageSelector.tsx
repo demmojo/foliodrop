@@ -24,7 +24,7 @@ export function LanguageSelector() {
   }, []);
 
   if (!mounted) {
-    return <div className="w-24 h-8 animate-pulse bg-border dark:bg-zinc-800 rounded" />;
+    return <div className="w-24 h-8 animate-pulse bg-border rounded" />;
   }
 
   return (
@@ -32,7 +32,7 @@ export function LanguageSelector() {
       <select
         value={lang}
         onChange={(e) => setLang(e.target.value as Language)}
-        className="appearance-none bg-surface border border-border text-foreground text-xs md:text-sm rounded px-3 py-1.5 pr-8 hover:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors cursor-pointer shadow-sm"
+        className="appearance-none bg-surface border border-border text-foreground text-xs md:text-sm rounded px-3 py-1.5 pr-8 hover:border-foreground/50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors cursor-pointer shadow-sm"
         aria-label="Select language"
       >
         {languages.map((l) => (

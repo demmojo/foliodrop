@@ -7,11 +7,11 @@ import { Info, Loader2, Copy, Check } from 'lucide-react';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
-  expectedRooms?: number;
+  expectedScenes?: number;
   onComplete: (data?: any) => void;
 }
 
-export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComplete }: ProcessingConsoleProps) {
+export default function ProcessingConsole({ sessionId, expectedScenes = 1, onComplete }: ProcessingConsoleProps) {
   const { t } = useTranslation();
   const { jobs } = useJobStore();
   
@@ -24,7 +24,7 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
     if (!sessionId) return;
 
     const sessionJobs = Object.values(jobs).filter(j => j.status !== 'PENDING'); 
-    const totalJobs = Math.max(expectedRooms, sessionJobs.length);
+    const totalJobs = Math.max(expectedScenes, sessionJobs.length);
     
     const completedItems = sessionJobs.filter(j => 
        ['COMPLETED', 'FLAGGED', 'NEEDS_REVIEW', 'READY', 'FAILED'].includes(j.status)
@@ -40,7 +40,7 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
       setRealProgress(percent === 0 ? 5 : percent);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, sessionId, expectedRooms, onComplete]);
+  }, [jobs, sessionId, expectedScenes, onComplete]);
 
    // "Creep" the display progress forward to simulate active work during long 60s waits
   useEffect(() => {
@@ -110,14 +110,14 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
          <div>
             <h4 className="text-sm font-semibold text-foreground mb-1">Safe to leave this page</h4>
             <p className="text-xs text-muted leading-relaxed font-medium">
-               Generative processing takes time. We&apos;ll handle everything in the background. You can use your room code to resume later.
+               Generative processing takes time. We&apos;ll handle everything in the background. You can use your session code to resume later.
             </p>
          </div>
       </div>
 
       {sessionId && (
         <div className="mt-8 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Room Code (Valid for 30 days)</p>
+           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Session Code (Valid for 30 days)</p>
            <div className="flex items-center gap-2 bg-surface border border-border pl-4 pr-1 py-1 rounded-full shadow-sm">
              <code className="text-sm font-mono text-foreground font-medium select-all">{sessionId}</code>
              <button

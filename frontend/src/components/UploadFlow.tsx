@@ -351,7 +351,7 @@ export default function UploadFlow() {
                   else if (blob.type === 'image/webp') ext = 'webp';
                   
                   // fallback to original name if available or generated room name
-                  let filename = photo.roomName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                  let filename = photo.sceneName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                   if (!filename) filename = `scene_${photo.id}`;
                   
                   // Ensure uniqueness by appending short id
@@ -484,7 +484,7 @@ export default function UploadFlow() {
       {/* TOAST */}
       {toastMessage && (
         <div data-testid="toast-message" className="fixed top-24 right-8 bg-surface border border-border text-foreground px-6 py-4 rounded-lg shadow-2xl z-50 animate-in slide-in-from-top-4 flex items-center gap-3">
-          <Info className="w-5 h-5 text-amber-500" />
+          <Info className="w-5 h-5 text-warning" />
           <span className="text-sm font-medium">{toastMessage}</span>
         </div>
       )}
@@ -588,7 +588,7 @@ export default function UploadFlow() {
                 Resume
               </button>
             </div>
-            {sessionCodeError && <p className="text-xs text-amber-500 mt-1" data-testid="session-code-error">{sessionCodeError}</p>}
+            {sessionCodeError && <p className="text-xs text-warning mt-1" data-testid="session-code-error">{sessionCodeError}</p>}
             <p className="text-[11px] text-muted text-center max-w-[300px] mt-1">
               Start an upload with this code, or enter an existing one to resume. Codes expire in 30 days.
             </p>
@@ -750,7 +750,7 @@ export default function UploadFlow() {
               </div>
            </div>
            
-           <div className="mt-6 flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 p-4 rounded-lg text-sm text-amber-600 dark:text-amber-500">
+           <div className="mt-6 flex items-start gap-3 bg-warning/10 border border-warning/20 p-4 rounded-lg text-sm text-warning">
               <AlertTriangle className="w-5 h-5 flex-shrink-0" />
               <p>Please review the scene groupings above. If the algorithm grouped a bathroom with a hallway, your camera&apos;s clock or burst speed may be irregular. If so, cancel and upload them separately.</p>
            </div>
@@ -785,7 +785,7 @@ export default function UploadFlow() {
       {flowState === 'PROCESSING' && (
         <ProcessingConsole 
           sessionId={activeSessionId} 
-          expectedRooms={photoGroups.length || 1}
+          expectedScenes={photoGroups.length || 1}
           onComplete={() => setFlowState('REVIEW')} 
         />
       )}

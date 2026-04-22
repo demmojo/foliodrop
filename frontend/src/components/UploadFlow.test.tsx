@@ -246,29 +246,8 @@ describe('UploadFlow Component', () => {
       fireEvent.change(sessionCodeInput, { target: { value: 'unique-flow-code-fail' } });
     });
 
-    // Also trigger onBlur to trigger validation failure
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    (global.fetch as any).mockImplementation((url: string) => {
-        if (url.includes('/api/v1/sessions/validate')) {
-             return Promise.reject(new Error('Validation network error'));
-        }
-        if (url.includes('/api/v1/jobs/active')) {
-             return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    });
-    
-    await act(async () => {
-      fireEvent.blur(sessionCodeInput);
-    });
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
-
     // Reset fetch mock for the upload failure part
     (global.fetch as any).mockImplementation((url: string) => {
-       if (url.includes('/api/v1/sessions/validate')) {
-         return Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true }) });
-       }
        if (url.includes('/api/v1/upload-urls')) {
          return Promise.reject(new Error('Network error'));
        }
@@ -796,86 +775,6 @@ describe('UploadFlow Component', () => {
     expect(toast.textContent).toContain('RAW processing is currently not supported');
   });
 
-  it('handles validation failure with suggested code', async () => {
-    (global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/v1/sessions/validate')) {
-        return Promise.resolve({ 
-          ok: true, 
-          json: () => Promise.resolve({ valid: false, message: 'Invalid session', suggested: 'suggested-sess' }) 
-        });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    });
-
-    await act(async () => {
-      render(<UploadFlow />);
-    });
-    
-    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
-
-    await act(async () => {
-      fireEvent.change(sessionCodeInput, { target: { value: 'invalid-sess' } });
-      fireEvent.blur(sessionCodeInput);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("session-code-error").textContent).toBe("Unavailable. We've suggested: suggested-sess");
-    });
-    
-    // Check if the input value was updated to the suggested one
-    expect(sessionCodeInput.value).toBe('suggested-sess');
-  });
-
-  it('handles validation failure without suggested code', async () => {
-    (global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/v1/sessions/validate')) {
-        return Promise.resolve({ 
-          ok: true, 
-          json: () => Promise.resolve({ valid: false, message: 'Just invalid' }) 
-        });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    });
-
-    await act(async () => {
-      render(<UploadFlow />);
-    });
-    
-    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
-
-    await act(async () => {
-      fireEvent.change(sessionCodeInput, { target: { value: 'another-invalid' } });
-      fireEvent.blur(sessionCodeInput);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("session-code-error").textContent).toBe("Just invalid");
-    });
-  });
-
-  it('handles validation API exception', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    (global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/v1/sessions/validate')) {
-        return Promise.reject(new Error('API Down'));
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    });
-
-    await act(async () => {
-      render(<UploadFlow />);
-    });
-    
-    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
-
-    await act(async () => {
-      fireEvent.change(sessionCodeInput, { target: { value: 'some-sess' } });
-      fireEvent.blur(sessionCodeInput);
-    });
-
-    expect(consoleSpy).toHaveBeenCalledWith(expect.any(Error));
-    consoleSpy.mockRestore();
-  });
 
   it('handles zip fallback when native share fails', async () => {
     // Reset Zustand state first
