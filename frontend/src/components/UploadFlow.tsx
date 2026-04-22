@@ -528,7 +528,7 @@ export default function UploadFlow() {
             </div>
           </div>
           
-          <div className="mt-16 w-full max-w-md pt-8 border-t border-border flex flex-col items-center gap-4">
+          <div className="mt-16 w-full max-w-md pt-8 border-t border-border flex flex-col items-center gap-4 relative z-10">
             <h3 className="text-sm font-medium text-foreground">Room Code</h3>
             <div className="flex w-full gap-2">
               <input
