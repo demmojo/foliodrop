@@ -16,8 +16,8 @@ interface ReviewGridProps {
 export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem, onOverrideWithManualEdit }: ReviewGridProps) {
   const [loupeImage, setLoupeImage] = useState<ProcessedHDR | null>(null);
 
-  const reviewQueue = photos.filter(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED');
-  const cargoGrid = photos.filter(p => !p.isFlagged && p.status === 'READY');
+  const reviewQueue = photos?.filter(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED') || [];
+  const cargoGrid = photos?.filter(p => !p.isFlagged && p.status === 'READY') || [];
 
   const handleImageError = async (e: React.SyntheticEvent<HTMLImageElement, Event>, originalUrl: string) => {
       // Very basic URL refresh logic

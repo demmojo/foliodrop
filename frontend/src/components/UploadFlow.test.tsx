@@ -46,7 +46,7 @@ describe('UploadFlow Component', () => {
 
   it('renders initial dropzone state', () => {
     render(<UploadFlow />);
-    expect(screen.getByText('Import Exposures')).toBeInTheDocument();
+    expect(screen.getByText('Import bracketed sets')).toBeInTheDocument();
   });
 
   // Skip jsdom dataTransfer test due to jsdom limitations with File and DataTransfer
