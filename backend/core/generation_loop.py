@@ -159,7 +159,7 @@ async def generate_hybrid_hdr(
         if style_urls:
             contents.append("Desired Style Reference: Apply the color grading, contrast, and tone from these reference images.")
             for url in style_urls:
-                contents.append(types.Part.from_uri(uri=url, mime_type="image/jpeg"))
+                contents.append(types.Part.from_uri(file_uri=url, mime_type="image/jpeg"))
 
         # Prompt construction
         prompt = """Professional interior architectural photography.

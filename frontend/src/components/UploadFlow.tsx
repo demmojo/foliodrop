@@ -269,7 +269,7 @@ export default function UploadFlow() {
 
       {/* TOAST */}
       {toastMessage && (
-        <div className="fixed top-24 right-8 bg-[#2A2A2A] border border-white/10 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-in slide-in-from-top-4 flex items-center gap-3">
+        <div className="fixed top-24 right-8 bg-surface border border-border text-foreground px-6 py-4 rounded-lg shadow-2xl z-50 animate-in slide-in-from-top-4 flex items-center gap-3">
           <Info className="w-5 h-5 text-amber-500" />
           <span className="text-sm font-medium">{toastMessage}</span>
         </div>
@@ -277,22 +277,22 @@ export default function UploadFlow() {
 
       {/* QUOTA HEADER */}
       {(flowState === 'IDLE' || flowState === 'CONFIRMATION') && quota && (
-        <div className="mb-8 px-5 py-2 bg-[#1C1C1E] border border-white/5 shadow-inner shadow-black/20 rounded-full text-xs font-medium flex items-center gap-3 text-white/50 tracking-wide uppercase">
+        <div className="mb-8 px-5 py-2 bg-surface border border-border shadow-sm rounded-full text-xs font-medium flex items-center gap-3 text-muted tracking-wide uppercase">
             <span>Monthly Allotment</span>
-            <span className="text-white bg-white/10 px-2 py-0.5 rounded">{quota.used} / {quota.limit} Scenes</span>
+            <span className="text-foreground bg-foreground/5 px-2 py-0.5 rounded">{quota.used} / {quota.limit} Scenes</span>
         </div>
       )}
 
       {/* STATE: IDLE */}
       {flowState === 'IDLE' && (
         <div className="w-full flex flex-col items-center animate-in fade-in duration-700">
-          <div className="w-full max-w-3xl aspect-[16/9] md:aspect-[21/9] bg-[#141415] border border-white/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_20px_40px_rgba(0,0,0,0.4)] rounded-2xl flex flex-col items-center justify-center text-center p-8 relative overflow-hidden group">
+          <div className="w-full max-w-3xl aspect-[16/9] md:aspect-[21/9] bg-surface border border-border shadow-sm rounded-2xl flex flex-col items-center justify-center text-center p-8 relative overflow-hidden group">
             
-            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-b from-foreground/[0.02] to-transparent pointer-events-none" />
             
-            <UploadCloud className="w-12 h-12 text-white/20 mb-6 group-hover:text-white/40 transition-colors duration-500" />
-            <h2 className="text-2xl md:text-3xl font-medium tracking-tight mb-3 text-white">Import bracketed sets</h2>
-            <p className="text-white/40 text-sm md:text-base mb-8 max-w-md mx-auto leading-relaxed">
+            <UploadCloud className="w-12 h-12 text-muted mb-6 group-hover:text-foreground/80 transition-colors duration-500" />
+            <h2 className="text-2xl md:text-3xl font-medium tracking-tight mb-3 text-foreground">Import bracketed sets</h2>
+            <p className="text-muted text-sm md:text-base mb-8 max-w-md mx-auto leading-relaxed">
               Auto-grouping powered by EXIF metadata. Drop JPEG or TIFF shoot folders here.
             </p>
             
@@ -307,7 +307,7 @@ export default function UploadFlow() {
               />
               <label 
                 htmlFor="file-upload" 
-                className="px-8 py-3.5 bg-white text-black hover:bg-white/90 transition-all rounded-full font-semibold cursor-pointer text-sm shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95 block"
+                className="px-8 py-3.5 bg-foreground text-background hover:opacity-90 transition-all rounded-full font-semibold cursor-pointer text-sm shadow-sm active:scale-95 block"
               >
                 Browse Files
               </label>
@@ -316,19 +316,19 @@ export default function UploadFlow() {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 max-w-4xl text-center px-4">
              <div className="flex flex-col items-center gap-3">
-                <Layers className="w-6 h-6 text-white/30" />
-                <h3 className="text-sm font-semibold text-white/80">Intelligent Grouping</h3>
-                <p className="text-xs text-white/40 leading-relaxed">Time-based EXIF detection automatically organizes your 3, 5, or 7 bracket sets instantly.</p>
+                <Layers className="w-6 h-6 text-muted" />
+                <h3 className="text-sm font-semibold text-foreground">Intelligent Grouping</h3>
+                <p className="text-xs text-muted leading-relaxed">Time-based EXIF detection automatically organizes your 3, 5, or 7 bracket sets instantly.</p>
              </div>
              <div className="flex flex-col items-center gap-3">
-                <div className="w-6 h-6 rounded flex items-center justify-center border border-white/30 text-white/30 text-[10px] font-bold">HDR</div>
-                <h3 className="text-sm font-semibold text-white/80">Zero-Halo Fusion</h3>
-                <p className="text-xs text-white/40 leading-relaxed">Structural OpenCV alignment ensures window pulls and deep shadows remain perfectly sharp.</p>
+                <div className="w-6 h-6 rounded flex items-center justify-center border border-muted text-muted text-[10px] font-bold">HDR</div>
+                <h3 className="text-sm font-semibold text-foreground">Zero-Halo Fusion</h3>
+                <p className="text-xs text-muted leading-relaxed">Structural OpenCV alignment ensures window pulls and deep shadows remain perfectly sharp.</p>
              </div>
              <div className="flex flex-col items-center gap-3">
-                <CheckCircle2 className="w-6 h-6 text-white/30" />
-                <h3 className="text-sm font-semibold text-white/80">MLS Optimized Output</h3>
-                <p className="text-xs text-white/40 leading-relaxed">Final images are intelligently tone-mapped and sized for pristine Multiple Listing Service delivery.</p>
+                <CheckCircle2 className="w-6 h-6 text-muted" />
+                <h3 className="text-sm font-semibold text-foreground">MLS Optimized Output</h3>
+                <p className="text-xs text-muted leading-relaxed">Final images are intelligently tone-mapped and sized for pristine Multiple Listing Service delivery.</p>
              </div>
           </div>
         </div>
@@ -337,40 +337,40 @@ export default function UploadFlow() {
       {/* STATE: PARSING */}
       {flowState === 'PARSING' && (
         <div className="flex flex-col items-center justify-center py-24 animate-in fade-in">
-           <Loader2 className="w-8 h-8 text-white/50 animate-spin mb-6" />
-           <h2 className="text-xl font-medium tracking-tight mb-2">Analyzing EXIF Data</h2>
-           <p className="text-white/40 text-sm">Organizing {uploadedFiles.length} files into structural groups...</p>
+           <Loader2 className="w-8 h-8 text-muted animate-spin mb-6" />
+           <h2 className="text-xl font-medium tracking-tight mb-2 text-foreground">Analyzing EXIF Data</h2>
+           <p className="text-muted text-sm">Organizing {uploadedFiles.length} files into structural groups...</p>
         </div>
       )}
 
       {/* STATE: CONFIRMATION (Intelligent Queue View) */}
       {flowState === 'CONFIRMATION' && (
         <div className="w-full max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6 border-b border-white/10 pb-6">
+           <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6 border-b border-border pb-6">
               <div>
-                 <h2 className="text-3xl font-medium tracking-tight text-white mb-2">Ready to Process</h2>
-                 <p className="text-white/50">
-                    <strong className="text-white">{photoGroups.length} Scenes</strong> detected from {uploadedFiles.length} files.
+                 <h2 className="text-3xl font-medium tracking-tight text-foreground mb-2">Ready to Process</h2>
+                 <p className="text-muted">
+                    <strong className="text-foreground">{photoGroups.length} Scenes</strong> detected from {uploadedFiles.length} files.
                  </p>
               </div>
               <div className="flex gap-3">
-                 <button onClick={() => setFlowState('IDLE')} className="px-6 py-3 rounded-full border border-white/10 hover:bg-white/5 text-white transition-colors text-sm font-medium tracking-wide">
+                 <button onClick={() => setFlowState('IDLE')} className="px-6 py-3 rounded-full border border-border hover:bg-muted/5 text-foreground transition-colors text-sm font-medium tracking-wide">
                     Cancel
                  </button>
-                 <button onClick={processUploadBatch} className="px-6 py-3 rounded-full bg-white text-black hover:bg-white/90 transition-all font-semibold text-sm shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95">
+                 <button onClick={processUploadBatch} className="px-6 py-3 rounded-full bg-foreground text-background hover:opacity-90 transition-all font-semibold text-sm shadow-sm active:scale-95">
                     Generate {photoGroups.length} Final Images
                  </button>
               </div>
            </div>
            
-           <div className="bg-[#141415] border border-white/5 shadow-inner rounded-xl p-6 overflow-hidden">
+           <div className="bg-surface border border-border shadow-sm rounded-xl p-6 overflow-hidden">
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 max-h-[60vh] overflow-y-auto pr-2 pb-4 custom-scrollbar">
                  {photoGroups.map((group, idx) => (
                     <div key={group.id} className="flex flex-col gap-2 group">
-                       <div className="relative aspect-[3/2] rounded-lg overflow-hidden border border-white/10 bg-black shadow-lg">
+                       <div className="relative aspect-[3/2] rounded-lg overflow-hidden border border-border bg-black shadow-sm">
                           {/* Stack effect */}
-                          <div className="absolute inset-0 bg-white/5 translate-x-1 translate-y-1 rounded-lg -z-10" />
-                          <div className="absolute inset-0 bg-white/5 translate-x-2 translate-y-2 rounded-lg -z-20" />
+                          <div className="absolute inset-0 bg-foreground/5 translate-x-1 translate-y-1 rounded-lg -z-10" />
+                          <div className="absolute inset-0 bg-foreground/5 translate-x-2 translate-y-2 rounded-lg -z-20" />
                           
                           <img src={group.previewUrl} alt={`Scene ${idx + 1}`} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                           
@@ -378,13 +378,13 @@ export default function UploadFlow() {
                              {group.photos.length} brackets
                           </div>
                        </div>
-                       <div className="text-xs font-medium text-white/60 px-1">Scene {idx + 1}</div>
+                       <div className="text-xs font-medium text-muted px-1">Scene {idx + 1}</div>
                     </div>
                  ))}
               </div>
            </div>
            
-           <div className="mt-6 flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 p-4 rounded-lg text-sm text-amber-500/90">
+           <div className="mt-6 flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 p-4 rounded-lg text-sm text-amber-600 dark:text-amber-500">
               <AlertTriangle className="w-5 h-5 flex-shrink-0" />
               <p>Please review the scene groupings above. If the algorithm grouped a bathroom with a hallway, your camera's clock or burst speed may be irregular. If so, cancel and upload them separately.</p>
            </div>
@@ -394,21 +394,21 @@ export default function UploadFlow() {
       {/* STATE: UPLOADING */}
       {flowState === 'UPLOADING' && (
          <div className="w-full max-w-2xl flex flex-col items-center justify-center py-24 animate-in fade-in">
-            <h2 className="text-2xl font-medium tracking-tight mb-8">Uploading Shoot Data</h2>
+            <h2 className="text-2xl font-medium tracking-tight mb-8 text-foreground">Uploading Shoot Data</h2>
             
-            <div className="w-full bg-[#1C1C1E] border border-white/5 h-3 rounded-full overflow-hidden mb-4 shadow-inner">
+            <div className="w-full bg-surface border border-border h-3 rounded-full overflow-hidden mb-4 shadow-inner">
                <div 
-                  className="h-full bg-white transition-all duration-300 ease-out" 
+                  className="h-full bg-foreground transition-all duration-300 ease-out" 
                   style={{ width: `${(uploadProgress.completed / uploadProgress.total) * 100}%` }}
                />
             </div>
             
             <div className="flex justify-between w-full text-sm font-medium">
-               <span className="text-white/40">Chunking & Transferring...</span>
-               <span className="text-white font-mono">{uploadProgress.completed} / {uploadProgress.total}</span>
+               <span className="text-muted">Chunking & Transferring...</span>
+               <span className="text-foreground font-mono">{uploadProgress.completed} / {uploadProgress.total}</span>
             </div>
             
-            <p className="mt-8 text-xs text-white/30 text-center flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full">
+            <p className="mt-8 text-xs text-muted text-center flex items-center gap-2 bg-surface px-4 py-2 rounded-full border border-border">
                <Info className="w-4 h-4" />
                Please leave this window open until the upload completes.
             </p>
@@ -426,7 +426,7 @@ export default function UploadFlow() {
 
       {/* STATE: REVIEW */}
       {flowState === 'REVIEW' && (
-        <div className="w-full h-[calc(100vh-64px)] absolute top-16 left-0 overflow-hidden bg-black">
+        <div className="w-full h-[calc(100vh-64px)] absolute top-16 left-0 overflow-hidden bg-background">
             <ReviewGrid 
                photos={processedPhotos} 
                onConfirm={handleFinalExport}
