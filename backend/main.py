@@ -123,7 +123,7 @@ def generate_session(db: IDatabase = Depends(get_database)):
         if db.check_session_code_availability(code):
             db.reserve_session_code(code)
             return {"code": code}
-    raise HTTPException(status_code=500, detail="Failed to generate session code")
+    raise HTTPException(status_code=500, detail="Failed to generate room code")
 
 class ValidateSessionRequest(BaseModel):
     code: str

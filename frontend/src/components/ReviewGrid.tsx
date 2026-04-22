@@ -155,15 +155,18 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {cargoGrid.map((photo) => (
                <div key={photo.id} className="flex flex-col gap-2">
-                 <div className="w-full aspect-[4/3] bg-surface border border-border rounded overflow-hidden">
+                 <div className="w-full aspect-[4/3] bg-surface border border-border rounded overflow-hidden group cursor-pointer" onClick={() => setLoupeImage(photo)}>
                     {(photo.thumbUrl || photo.url) && (
                         <img 
                             src={photo.thumbUrl || photo.url} 
                             alt={photo.roomName || 'Room Image'} 
                             onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '')}
-                            className="object-cover w-full h-full" 
+                            className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
                         />
                     )}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden group-hover:flex bg-black/10">
+                        <span className="text-white text-xs uppercase tracking-widest bg-black/60 px-2 py-1 rounded shadow-sm backdrop-blur-sm relative z-10 hidden group-hover:block">Inspect</span>
+                    </div>
                  </div>
                  <div className="text-xs text-muted font-medium px-1">{photo.roomName}</div>
                </div>
@@ -182,7 +185,9 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
               <div className="flex justify-between items-center p-4 border-b border-white/10">
                   <div className="flex items-center gap-4">
                       <span className="text-white font-medium truncate max-w-[200px] md:max-w-none">{loupeImage.roomName}</span>
-                      <span className="hidden sm:inline-block text-xs text-amber-500 border border-amber-500/30 bg-amber-500/10 px-2 py-1 rounded">Needs Review</span>
+                      {(loupeImage.isFlagged || loupeImage.status === 'NEEDS_REVIEW') && (
+                          <span className="hidden sm:inline-block text-xs text-amber-500 border border-amber-500/30 bg-amber-500/10 px-2 py-1 rounded">Needs Review</span>
+                      )}
                   </div>
                   <button onClick={() => setLoupeImage(null)} className="text-white/60 hover:text-white text-3xl p-2 leading-none">&times;</button>
               </div>
@@ -211,7 +216,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                          />
                      </label>
                  )}
-                 {onKeepItem && (
+                 {onKeepItem && (loupeImage.isFlagged || loupeImage.status === 'NEEDS_REVIEW') && (
                      <button 
                         onClick={() => { onKeepItem(loupeImage.id); setLoupeImage(null); }}
                         className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none"
