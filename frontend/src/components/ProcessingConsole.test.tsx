@@ -24,6 +24,13 @@ describe('ProcessingConsole Component', () => {
     expect(screen.getByText('status_aligning...')).toBeInTheDocument();
   });
 
+  it('handles null sessionId gracefully', () => {
+    render(<ProcessingConsole sessionId={null} expectedRooms={2} onComplete={vi.fn()} />);
+    
+    // Should still render but not trigger useEffect processing logic
+    expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
+  });
+
   it('updates progress when jobs complete and triggers onComplete', () => {
     const onCompleteMock = vi.fn();
     render(<ProcessingConsole sessionId="sess1" expectedRooms={1} onComplete={onCompleteMock} />);
@@ -78,5 +85,64 @@ describe('ProcessingConsole Component', () => {
 
     // Should creep past 50%
     expect(screen.getByText('status_fusing...')).toBeInTheDocument();
+    
+    // Now push realProgress to something that allows creep > 80
+    act(() => {
+      useJobStore.setState({
+        jobs: {
+          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1', url: '1.jpg', roomName: 'Room1', status: 'READY' } },
+          // Note: total jobs is max(expectedRooms(2), sessionJobs.length(2))
+          'job2': { id: 'job2', status: 'PROCESSING', nextPollAt: 0 } // Not completed, but we can set expectedRooms = 3 to get 2/3 = 66% => maxCreep 81
+        }
+      });
+    });
+    
+    act(() => {
+      vi.advanceTimersByTime(60000); // creep some more
+    });
+    
+    // Might hit denoising if we get past 80
+    // Actually, if we just set realProgress to 85%, displayProgress will jump to 85%.
+    // To do that, set 5 out of 6 rooms complete.
+    act(() => {
+      useJobStore.setState({
+        jobs: {
+          'j1': { id: '1', status: 'COMPLETED', nextPollAt: 0, result: { id: '1' } },
+          'j2': { id: '2', status: 'COMPLETED', nextPollAt: 0, result: { id: '2' } },
+          'j3': { id: '3', status: 'COMPLETED', nextPollAt: 0, result: { id: '3' } },
+          'j4': { id: '4', status: 'COMPLETED', nextPollAt: 0, result: { id: '4' } },
+          'j5': { id: '5', status: 'COMPLETED', nextPollAt: 0, result: { id: '5' } },
+          'j6': { id: '6', status: 'PROCESSING', nextPollAt: 0 }
+        }
+      });
+    });
+    
+    expect(screen.getByText('status_denoising...')).toBeInTheDocument();
+  });
+
+  it('copies room code to clipboard', async () => {
+    // Mock clipboard
+    const writeTextMock = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: writeTextMock,
+      },
+      configurable: true
+    });
+
+    render(<ProcessingConsole sessionId="test-session-123" expectedRooms={2} onComplete={vi.fn()} />);
+    
+    const copyBtn = screen.getByTitle('Copy to clipboard');
+    
+    act(() => {
+      copyBtn.click();
+    });
+    
+    expect(writeTextMock).toHaveBeenCalledWith('test-session-123');
+    
+    // Fast-forward to test timeout resetting hasCopied
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
   });
 });

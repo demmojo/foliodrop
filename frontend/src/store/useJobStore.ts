@@ -112,6 +112,10 @@ export const useJobStore = create<JobStore>((set, get) => ({
         body: formData,
       });
       
+      if (!res.ok) {
+        console.error("Failed to override with manual edit");
+      }
+      
       // Update local state optimistic/mock if backend isn't ready
       const mockUrl = URL.createObjectURL(file);
       set((state) => {

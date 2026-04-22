@@ -48,12 +48,20 @@ export default function UploadFlow() {
 
   useEffect(() => {
     if (flowState === 'IDLE' && !activeSessionId && !sessionCode) {
-      fetch(`${API_URL}/api/v1/sessions/generate`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.code) setSessionCode(data.code);
-        })
-        .catch(console.error);
+      const storedRoomCode = localStorage.getItem('hdr_room_code');
+      if (storedRoomCode) {
+        setSessionCode(storedRoomCode);
+      } else {
+        fetch(`${API_URL}/api/v1/sessions/generate`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.code) {
+              setSessionCode(data.code);
+              localStorage.setItem('hdr_room_code', data.code);
+            }
+          })
+          .catch(console.error);
+      }
     }
   }, [flowState, activeSessionId, sessionCode, API_URL]);
 
@@ -69,6 +77,7 @@ export default function UploadFlow() {
   };
 
   const handleResumeSession = useCallback(async (id: string) => {
+    localStorage.setItem('hdr_room_code', id);
     await rehydrateSession(id);
     setFlowState('REVIEW');
   }, [rehydrateSession]);
@@ -187,13 +196,14 @@ export default function UploadFlow() {
       if (!valData.valid) {
          setSessionCodeError(valData.message);
          if (valData.suggested) setSessionCode(valData.suggested);
-         showToast("Session code unavailable. Please check the suggested code.");
+         showToast("Room code unavailable. Please check the suggested code.");
          setFlowState('IDLE');
          return;
       }
       
       const sid = sessionCode;
       setSessionId(sid);
+      localStorage.setItem('hdr_room_code', sid);
       
       const newSession = { id: sid, date: Date.now(), count: estRooms };
       const updatedSessions = [newSession, ...recentSessions].slice(0, 20);
@@ -328,6 +338,7 @@ export default function UploadFlow() {
               
               try {
                   const response = await fetch(url);
+                  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                   const blob = await response.blob();
                   
                   // determine extension from blob type or default to jpg
@@ -400,7 +411,7 @@ export default function UploadFlow() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto flex flex-col items-center justify-center min-h-[calc(100dvh-8rem)] px-4 pb-safe pt-safe sm:pb-12 sm:pt-8 relative">
-      {/* ALWAYS VISIBLE SESSION CODE */}
+      {/* ALWAYS VISIBLE ROOM CODE */}
       {(sessionCode || activeSessionId) && flowState !== 'IDLE' && (
         <div className="fixed top-4 right-4 sm:top-8 sm:right-8 z-40 bg-surface/80 backdrop-blur border border-border px-4 py-2 rounded-full shadow-sm flex items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-widest text-muted">Room Code</span>
@@ -472,7 +483,7 @@ export default function UploadFlow() {
           </div>
           
           <div className="mt-16 w-full max-w-md pt-8 border-t border-border flex flex-col items-center gap-4">
-            <h3 className="text-sm font-medium text-foreground">Room / Session Code</h3>
+            <h3 className="text-sm font-medium text-foreground">Room Code</h3>
             <div className="flex w-full gap-2">
               <input
                 type="text"
@@ -492,6 +503,9 @@ export default function UploadFlow() {
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ code: sessionCode })
                     });
+                    
+                    if (!res.ok) throw new Error("Validation failed");
+                    
                     const data = await res.json();
                     if (!data.valid) {
                       setSessionCodeError(data.message || "Code unavailable.");
@@ -511,8 +525,10 @@ export default function UploadFlow() {
                     if (sessionCode) handleResumeSession(sessionCode);
                   }
                 }}
+                data-testid="session-code-input"
               />
               <button
+                data-testid="resume-button"
                 onClick={() => {
                   if (sessionCode) handleResumeSession(sessionCode);
                 }}
@@ -528,11 +544,12 @@ export default function UploadFlow() {
 
             {recentSessions.length > 0 && (
               <div className="w-full mt-6 flex flex-col gap-2">
-                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Recent Sessions</h4>
+                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Recent Rooms</h4>
                 <div className="flex flex-col gap-2 relative">
                   {recentSessions.slice(0, showAllSessions ? recentSessions.length : 2).map((session, i) => (
                     <button
                       key={session.id}
+                      data-testid={`resume-session-${session.id}`}
                       onClick={() => handleResumeSession(session.id)}
                       className={clsx(
                         "flex items-center justify-between px-4 py-3 bg-surface border border-border rounded-lg hover:bg-muted/5 transition-all text-left group relative z-10",
@@ -563,10 +580,11 @@ export default function UploadFlow() {
                 
                 {!showAllSessions && recentSessions.length > 2 && (
                   <button
+                    data-testid="show-more-sessions"
                     onClick={() => setShowAllSessions(true)}
                     className="text-xs text-muted hover:text-foreground font-medium mt-2 transition-colors py-1 z-30"
                   >
-                    Show {recentSessions.length - 2} more sessions
+                    Show {recentSessions.length - 2} more rooms
                   </button>
                 )}
               </div>

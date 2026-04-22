@@ -154,6 +154,18 @@ describe('useJobStore', () => {
       expect(state.jobs['job1'].result?.status).toBe('APPROVED');
     });
 
+    it('overrideWithManualEdit should log error if network fails', async () => {
+      mockFetch.mockImplementationOnce((url) => {
+        return Promise.reject(new Error("Network Error"));
+      });
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await useJobStore.getState().overrideWithManualEdit('job1', new File([''], 'edit.jpg'));
+
+      expect(consoleSpy).toHaveBeenCalledWith("Failed to override with manual edit", expect.any(Error));
+      consoleSpy.mockRestore();
+    });
+
     it('fetchQuota should succeed', async () => {
       mockFetch.mockImplementationOnce((url) => {
         if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
@@ -169,6 +181,68 @@ describe('useJobStore', () => {
       expect(useJobStore.getState().quota).toEqual({ used: 5, limit: 10 });
     });
 
+    it('rehydrateSession should handle errors', async () => {
+      mockFetch.mockImplementationOnce((url) => {
+        return Promise.reject(new Error("Network Error"));
+      });
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await useJobStore.getState().rehydrateSession('sess123');
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('pollDueJobs should handle errors', async () => {
+      useJobStore.setState({
+        jobs: {
+          'job1': { id: 'job1', status: 'PENDING', nextPollAt: 0 }
+        }
+      });
+
+      mockFetch.mockImplementationOnce((url) => {
+        return Promise.reject(new Error("Network Error"));
+      });
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await useJobStore.getState().pollDueJobs();
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('pollDueJobs should handle non-ok response', async () => {
+      useJobStore.setState({
+        jobs: {
+          'job1': { id: 'job1', status: 'PENDING', nextPollAt: 0 }
+        }
+      });
+
+      mockFetch.mockImplementationOnce((url) => {
+        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
+        return Promise.resolve({
+          ok: false,
+          headers: { get: () => null },
+          json: () => Promise.resolve({})
+        });
+      });
+      
+      await useJobStore.getState().pollDueJobs();
+      // Should silently do nothing
+      expect(useJobStore.getState().jobs['job1'].status).toBe('PENDING');
+    });
+
+    it('fetchQuota should handle error', async () => {
+      mockFetch.mockImplementationOnce((url) => {
+        return Promise.reject(new Error("Network Error"));
+      });
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await useJobStore.getState().fetchQuota();
+
+      expect(consoleSpy).toHaveBeenCalledWith("Failed to fetch quota", expect.any(Error));
+      consoleSpy.mockRestore();
+    });
     it('rehydrateSession should succeed', async () => {
       const now = Date.now();
       vi.spyOn(Date, 'now').mockReturnValue(now);

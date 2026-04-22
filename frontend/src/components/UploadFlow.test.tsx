@@ -137,7 +137,7 @@ describe('UploadFlow Component', () => {
     const textInputs = document.querySelectorAll('input[type="text"]');
     const sessionCodeInput = textInputs[0] as HTMLInputElement;
     await act(async () => {
-      fireEvent.change(sessionCodeInput, { target: { value: 'test-code' } });
+      fireEvent.change(sessionCodeInput, { target: { value: 'unique-flow-code' } });
     });
 
     // 1. Select files
@@ -207,6 +207,9 @@ describe('UploadFlow Component', () => {
     Object.defineProperty(navigator, 'canShare', { value: vi.fn().mockReturnValue(true), configurable: true });
     Object.defineProperty(navigator, 'share', { value: vi.fn().mockResolvedValue(undefined), configurable: true });
     
+    // Also mock the window confirm
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    
     await act(async () => {
       fireEvent.click(confirmBtn);
     });
@@ -214,9 +217,13 @@ describe('UploadFlow Component', () => {
     await waitFor(() => {
       expect(navigator.share).toHaveBeenCalled();
     });
+    confirmSpy.mockRestore();
   });
 
   it('shows error if upload fails', async () => {
+    // Reset state
+    useJobStore.setState({ activeSessionId: null, jobs: {}, quota: null, flowState: 'IDLE' });
+
     await act(async () => {
       render(<UploadFlow />);
     });
@@ -225,7 +232,39 @@ describe('UploadFlow Component', () => {
     const textInputs = document.querySelectorAll('input[type="text"]');
     const sessionCodeInput = textInputs[0] as HTMLInputElement;
     await act(async () => {
-      fireEvent.change(sessionCodeInput, { target: { value: 'test-code' } });
+      fireEvent.change(sessionCodeInput, { target: { value: 'unique-flow-code-fail' } });
+    });
+
+    // Also trigger onBlur to trigger validation failure
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    (global.fetch as any).mockImplementation((url: string) => {
+        if (url.includes('/api/v1/sessions/validate')) {
+             return Promise.reject(new Error('Validation network error'));
+        }
+        if (url.includes('/api/v1/jobs/active')) {
+             return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    
+    await act(async () => {
+      fireEvent.blur(sessionCodeInput);
+    });
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+
+    // Reset fetch mock for the upload failure part
+    (global.fetch as any).mockImplementation((url: string) => {
+       if (url.includes('/api/v1/sessions/validate')) {
+         return Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true }) });
+       }
+       if (url.includes('/api/v1/upload-urls')) {
+         return Promise.reject(new Error('Network error'));
+       }
+       if (url.includes('/api/v1/jobs/active')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
+       }
+       return Promise.resolve({ ok: true, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) });
     });
 
     // 1. Select files
@@ -239,17 +278,6 @@ describe('UploadFlow Component', () => {
     // 2. Wait for confirmation
     await waitFor(() => {
       expect(screen.getByText('Ready to Process')).toBeInTheDocument();
-    });
-
-    // Setup API mock to fail initialization
-    (global.fetch as any).mockImplementation((url: string) => {
-       if (url.includes('/api/v1/sessions/validate')) {
-         return Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true }) });
-       }
-       if (url.includes('/api/v1/upload-urls')) {
-         return Promise.reject(new Error('Network error'));
-       }
-       return Promise.resolve({ ok: true, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) });
     });
 
     // 3. Click "Generate"
@@ -298,9 +326,44 @@ describe('UploadFlow Component', () => {
     expect(useJobStore.getState().jobs['job1']).toBeUndefined();
   });
 
-  it('handles zip fallback when native share fails', async () => {
+  it('handles branch coverage for sorting photos with missing exposure data', async () => {
+    // Create photos where one has missing exposure data to hit the fallback sorting paths
+    const photoGroupWithMissingData = {
+      id: 'group1',
+      photos: [
+        { file: new File([], '1.jpg'), previewUrl: 'blob:http', timestamp: 1000 }, // No exposure data
+        { file: new File([], '2.jpg'), previewUrl: 'blob:http', timestamp: 2000, exposureCompensation: 0, exposureTime: 0.1 },
+        { file: new File([], '3.jpg'), previewUrl: 'blob:http', timestamp: 3000, exposureCompensation: 1, exposureTime: 0.5 },
+        { file: new File([], '4.jpg'), previewUrl: 'blob:http', timestamp: 4000, exposureCompensation: 0 } // missing exposureTime, same compensation
+      ],
+      previewUrl: 'blob:http'
+    };
+
+    // To hit the lines (631-638) we need to be in CONFIRMATION state
+    // We can use the mock EXIF logic to generate this
+    const exifProcessor = await import('../utils/exif');
+    vi.mocked(exifProcessor.groupPhotosIntoScenes).mockReturnValueOnce([photoGroupWithMissingData as any]);
+
+    render(<UploadFlow />);
+
+    const dropzone = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['dummy'], 'dummy.jpg', { type: 'image/jpeg' });
+    
+    await act(async () => {
+      fireEvent.change(dropzone, { target: { files: [file] } });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Ready to Process')).toBeInTheDocument();
+    });
+
+    // Verify the EV rendering which is also partially uncovered
+    expect(screen.getAllByText('0 EV').length).toBeGreaterThan(0);
+    expect(screen.getByText('+1 EV')).toBeInTheDocument();
+  });
+
+  it('handles complete export failure (e.g. all fetches fail)', async () => {
     mockSearchParams.set('session', 'sess');
-    // We can simulate the state reaching REVIEW with jobs
     useJobStore.setState({
       activeSessionId: 'sess',
       jobs: {
@@ -308,9 +371,323 @@ describe('UploadFlow Component', () => {
       }
     });
 
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      blob: () => Promise.resolve(new Blob(['test'], { type: 'image/jpeg' }))
+    // Mock fetch to simulate image download failures
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    
+    // IMPORTANT: Make sure this mock fetch provides json() and ok:true for the quota/rehydrate calls that happen on mount
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/api/v1/quota')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+      }
+      if (url.includes('/api/v1/sessions/')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: {} }) });
+      }
+      return Promise.rejectedValue(new Error('Download failed'));
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-review-grid')).toBeInTheDocument();
+    });
+
+    const confirmBtn = screen.getByTestId('review-confirm');
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    // Check for error toast
+    await waitFor(() => {
+      expect(screen.getByText('Failed to export images.')).toBeInTheDocument();
+    });
+    
+    consoleSpy.mockRestore();
+  });
+
+  it('shows error for short session code on blur', async () => {
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(sessionCodeInput, { target: { value: 'short' } });
+      fireEvent.blur(sessionCodeInput);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Must be at least 6 characters.")).toBeInTheDocument();
+    });
+  });
+  it('shows recent sessions and can resume from them', async () => {
+    // Set up local storage with some sessions
+    const pastSessions = [
+      { id: 'sess-old-1', date: Date.now() - 100000, count: 5 },
+      { id: 'sess-old-2', date: Date.now() - 200000, count: 10 },
+      { id: 'sess-old-3', date: Date.now() - 300000, count: 15 } // To test 'show all'
+    ];
+    localStorage.setItem('hdr_recent_sessions', JSON.stringify(pastSessions));
+
+    // IMPORTANT: Make sure this mock fetch provides json() and ok:true for the quota/rehydrate calls that happen on mount
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/api/v1/quota')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+      }
+      if (url.includes('/api/v1/sessions/')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: {} }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<UploadFlow />);
+
+    // The first 2 sessions should be visible
+    expect(screen.getByText('sess-old-1')).toBeInTheDocument();
+    
+    // Test expanding the list
+    const showMoreBtn = screen.getByText(/Show \d+ more rooms/i);
+    await act(async () => {
+      fireEvent.click(showMoreBtn);
+    });
+
+    // Should now show the 3rd session
+    expect(screen.getByText('sess-old-3')).toBeInTheDocument();
+
+    // Click to resume
+    const resumeBtn = screen.getByTestId('resume-session-sess-old-3');
+    await act(async () => {
+      fireEvent.click(resumeBtn);
+    });
+
+    // Should trigger rehydrate (via mock in setup, fetch is called)
+    expect(global.fetch).toHaveBeenCalled();
+  });
+
+  it('handles Complete action in Processing Console to Review', async () => {
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    // Setup API mocks
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/api/v1/quota')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+      }
+      if (url.includes('/api/v1/sessions/validate')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true }) });
+      }
+      if (url.includes('/api/v1/upload-urls')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ session_id: 'sess', urls: [{ url: 'http://upload' }] }) });
+      }
+      if (url.includes('http://upload')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (url.includes('/api/v1/finalize-job')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ job_ids: ['job1'] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) });
+    });
+
+    // We can simulate state transition directly or through the flow
+    // Entering flow
+    const textInputs = document.querySelectorAll('input[type="text"]');
+    const sessionCodeInput = textInputs[0] as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(sessionCodeInput, { target: { value: 'test-code' } });
+    });
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([''], 'test.jpg', { type: 'image/jpeg' });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Ready to Process')).toBeInTheDocument();
+    });
+
+    const generateBtn = screen.getByText(/Generate 1 Final Images/i);
+    await act(async () => {
+      fireEvent.click(generateBtn);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-processing-console')).toBeInTheDocument();
+    });
+
+    // Mock completion
+    await act(async () => {
+      useJobStore.setState({
+        jobs: {
+          'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'test.jpg', roomName: 'Room', status: 'READY' } }
+        }
+      });
+      // Click the mocked button from the ProcessingConsole mock
+      fireEvent.click(screen.getByTestId('complete-processing'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-review-grid')).toBeInTheDocument();
+    });
+  });
+
+  it('handles resume session via Enter key', async () => {
+    // Reset Zustand state first
+    useJobStore.setState({
+      activeSessionId: null,
+      jobs: {},
+      quota: null,
+      flowState: 'IDLE'
+    });
+    
+    // Setup API mock
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
+      if (url.includes('/api/v1/jobs/active')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as any);
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(sessionCodeInput, { target: { value: 'session-enter' } });
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(sessionCodeInput, { key: 'Enter', code: 'Enter' });
+    });
+
+    // Wait a tick
+    await new Promise(r => setTimeout(r, 0));
+    
+    // Check if fetch was called with the specific active jobs endpoint for session-enter
+    const activeJobsCall = fetchSpy.mock.calls.find(call => String(call[0]).includes('/api/v1/jobs/active?session_id=session-enter'));
+    expect(activeJobsCall).toBeTruthy();
+    
+    fetchSpy.mockRestore();
+  });
+
+  it('handles validation failure with suggested code', async () => {
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/api/v1/sessions/validate')) {
+        return Promise.resolve({ 
+          ok: true, 
+          json: () => Promise.resolve({ valid: false, message: 'Invalid session', suggested: 'suggested-sess' }) 
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(sessionCodeInput, { target: { value: 'invalid-sess' } });
+      fireEvent.blur(sessionCodeInput);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Unavailable. We've suggested: suggested-sess")).toBeInTheDocument();
+    });
+    
+    // Check if the input value was updated to the suggested one
+    expect(sessionCodeInput.value).toBe('suggested-sess');
+  });
+
+  it('handles validation failure without suggested code', async () => {
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/api/v1/sessions/validate')) {
+        return Promise.resolve({ 
+          ok: true, 
+          json: () => Promise.resolve({ valid: false, message: 'Just invalid' }) 
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(sessionCodeInput, { target: { value: 'another-invalid' } });
+      fireEvent.blur(sessionCodeInput);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Just invalid")).toBeInTheDocument();
+    });
+  });
+
+  it('handles validation API exception', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/api/v1/sessions/validate')) {
+        return Promise.reject(new Error('API Down'));
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+    
+    const sessionCodeInput = screen.getByTestId('session-code-input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(sessionCodeInput, { target: { value: 'some-sess' } });
+      fireEvent.blur(sessionCodeInput);
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.any(Error));
+    consoleSpy.mockRestore();
+  });
+
+  it('handles zip fallback when native share fails', async () => {
+    // Reset Zustand state first
+    useJobStore.setState({
+      activeSessionId: null,
+      jobs: {},
+      quota: null,
+      flowState: 'IDLE'
+    });
+    
+    mockSearchParams.set('session', 'sess');
+    // We can simulate the state reaching REVIEW with jobs
+    useJobStore.setState({
+      activeSessionId: 'sess',
+      flowState: 'REVIEW',
+      jobs: {
+        'job1': { id: 'job1', status: 'COMPLETED', nextPollAt: 0, result: { id: 'job1', url: 'blob:http', roomName: 'Room', status: 'READY', isFlagged: false } }
+      }
+    });
+
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/api/v1/quota')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ used: 0, limit: 100 }) });
+      }
+      if (url.includes('/api/v1/sessions/')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: {} }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        blob: () => Promise.resolve(new Blob(['test'], { type: 'image/jpeg' }))
+      });
     });
 
     Object.defineProperty(navigator, 'canShare', { value: vi.fn().mockReturnValue(true), configurable: true });

@@ -110,14 +110,14 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
          <div>
             <h4 className="text-sm font-semibold text-foreground mb-1">Safe to leave this page</h4>
             <p className="text-xs text-muted leading-relaxed font-medium">
-               Generative processing takes time. We&apos;ll handle everything in the background. You can use your session code to resume later.
+               Generative processing takes time. We&apos;ll handle everything in the background. You can use your room code to resume later.
             </p>
          </div>
       </div>
 
       {sessionId && (
         <div className="mt-8 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Session Code (Valid for 30 days)</p>
+           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Room Code (Valid for 30 days)</p>
            <div className="flex items-center gap-2 bg-surface border border-border pl-4 pr-1 py-1 rounded-full shadow-sm">
              <code className="text-sm font-mono text-foreground font-medium select-all">{sessionId}</code>
              <button

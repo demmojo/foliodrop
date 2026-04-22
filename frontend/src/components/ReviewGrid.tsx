@@ -32,8 +32,16 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
           // or we just assume we can call an endpoint to get a fresh one based on some path.
           // For simplicity, let's assume the backend provides a way if we pass the expired URL or path.
           // In a real implementation we would parse the path from URL.
-          const urlObj = new URL(originalUrl);
-          const blobPath = urlObj.pathname.slice(1); // Remove leading slash
+          let blobPath = originalUrl;
+          try {
+             if (originalUrl && originalUrl.startsWith('http')) {
+                 const urlObj = new URL(originalUrl);
+                 blobPath = urlObj.pathname.slice(1); // Remove leading slash
+             }
+          } catch (e) {
+             // Fallback
+             console.error("Failed to parse originalUrl as URL", e);
+          }
 
           const res = await fetch(`${API_URL}/api/v1/jobs/batch-signed-url`, {
               method: 'POST',
@@ -41,7 +49,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
               body: JSON.stringify({ blob_paths: [blobPath] })
           });
           const data = await res.json();
-          if (data.urls && data.urls[0]) {
+          if (data.urls && data.urls[0] && data.urls[0].url) {
               target.src = data.urls[0].url;
           }
       } catch (err) {
@@ -68,12 +76,12 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                    {photo.thumbUrl || photo.url ? (
                        <img 
                           src={photo.thumbUrl || photo.url} 
-                          alt={photo.roomName} 
-                          onError={(e) => handleImageError(e, photo.thumbUrl || photo.url)}
+                          alt={photo.roomName || 'Room Image'} 
+                          onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '')}
                           className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
                        />
                    ) : (
-                       <div className="w-full h-full flex items-center justify-center text-muted text-xs">Loading...</div>
+                       <div data-testid="loading-placeholder" className="w-full h-full flex items-center justify-center text-muted text-xs">Loading...</div>
                    )}
                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                        <span className="text-white text-xs uppercase tracking-widest bg-black/60 px-2 py-1 rounded">Inspect</span>
@@ -151,8 +159,8 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     {(photo.thumbUrl || photo.url) && (
                         <img 
                             src={photo.thumbUrl || photo.url} 
-                            alt={photo.roomName} 
-                            onError={(e) => handleImageError(e, photo.thumbUrl || photo.url)}
+                            alt={photo.roomName || 'Room Image'} 
+                            onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '')}
                             className="object-cover w-full h-full" 
                         />
                     )}
@@ -162,7 +170,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
             ))}
          </div>
          {cargoGrid.length === 0 && reviewQueue.length > 0 && (
-             <div className="w-full h-48 md:h-64 flex items-center justify-center text-center px-4 text-muted border border-dashed border-border rounded-lg">
+             <div data-testid="review-all-msg" className="w-full h-48 md:h-64 flex items-center justify-center text-center px-4 text-muted border border-dashed border-border rounded-lg">
                  All images require review. Please check the queue.
              </div>
          )}

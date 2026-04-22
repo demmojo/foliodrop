@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import ExposureModal from './ExposureModal';
 
 vi.mock('../hooks/useTranslation', () => ({
-  useTranslation: () => ({ t: (key: string) => key })
+  useTranslation: () => ({ t: (key: string) => key === 'close' ? '' : key })
 }));
 
 vi.mock('./BeforeAfterSlider', () => ({
@@ -21,7 +21,17 @@ describe('ExposureModal Component', () => {
     originalUrl: 'orig.jpg',
     captureTime: '2023-01-01T12:00:00Z',
     roomName: 'Living Room',
-    parameters: { exposure_ev: 1 }
+    parameters: { 
+      exposure_ev: 1,
+      contrast_intensity: 10,
+      contrast_midpoint: 40,
+      warmth: 1.2,
+      tint: 1.1,
+      sharpness: 1,
+      rotation_degrees: 5,
+      barrel_distortion: 0.05
+    },
+    telemetry: [{ raw_output: { exposure_ev: 0.5 } }]
   };
 
   beforeEach(() => {
@@ -31,6 +41,12 @@ describe('ExposureModal Component', () => {
   it('does not render when isOpen is false', () => {
     const { container } = render(<ExposureModal isOpen={false} photo={mockPhoto} onClose={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
+    
+    // Test the branch where isOpen is false but keydown event is fired (should just return)
+    const onCloseMock = vi.fn();
+    render(<ExposureModal isOpen={false} photo={mockPhoto} onClose={onCloseMock} />);
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    expect(onCloseMock).not.toHaveBeenCalled();
   });
 
   it('renders modal content when open', () => {
@@ -76,9 +92,13 @@ describe('ExposureModal Component', () => {
     render(<ExposureModal isOpen={true} photo={mockPhoto} onClose={onCloseMock} />);
     
     fireEvent.keyDown(document, { key: 'a', code: 'KeyA' });
-    
     expect(consoleSpy).toHaveBeenCalledWith('Approved: photo1');
     expect(onCloseMock).toHaveBeenCalledTimes(1);
+    
+    fireEvent.keyDown(document, { key: 'A', code: 'KeyA' });
+    expect(consoleSpy).toHaveBeenCalledWith('Approved: photo1');
+    expect(onCloseMock).toHaveBeenCalledTimes(2);
+
     consoleSpy.mockRestore();
   });
 
@@ -88,10 +108,21 @@ describe('ExposureModal Component', () => {
     render(<ExposureModal isOpen={true} photo={mockPhoto} onClose={onCloseMock} />);
     
     fireEvent.keyDown(document, { key: 'r', code: 'KeyR' });
-    
     expect(consoleSpy).toHaveBeenCalledWith('Rejected: photo1');
     expect(onCloseMock).toHaveBeenCalledTimes(1);
+    
+    fireEvent.keyDown(document, { key: 'R', code: 'KeyR' });
+    expect(consoleSpy).toHaveBeenCalledWith('Rejected: photo1');
+    expect(onCloseMock).toHaveBeenCalledTimes(2);
+
     consoleSpy.mockRestore();
+  });
+
+  it('handles unknown keydown', () => {
+    const onCloseMock = vi.fn();
+    render(<ExposureModal isOpen={true} photo={mockPhoto} onClose={onCloseMock} />);
+    fireEvent.keyDown(document, { key: 'x', code: 'KeyX' });
+    expect(onCloseMock).not.toHaveBeenCalled();
   });
 
   it('renders standard image if originalUrl is not provided', () => {
@@ -101,5 +132,13 @@ describe('ExposureModal Component', () => {
     expect(screen.queryByTestId('mock-before-after-slider')).not.toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAttribute('src', 'test.jpg');
     expect(screen.getByText('No VLM parameters available for this image.')).toBeInTheDocument();
+  });
+
+  it('renders parameters with default values when undefined', () => {
+    const emptyParamsPhoto = { ...mockPhoto, parameters: {} as any };
+    render(<ExposureModal isOpen={true} photo={emptyParamsPhoto} onClose={vi.fn()} />);
+    
+    // Just ensuring it renders without crashing
+    expect(screen.getByTestId('slider-Exposure (EV)')).toBeInTheDocument();
   });
 });
