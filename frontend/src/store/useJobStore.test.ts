@@ -218,11 +218,11 @@ describe('useJobStore', () => {
         }
       });
 
-      mockFetch.mockImplementationOnce((url) => {
+      mockFetch.mockImplementation((url) => {
         if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
         return Promise.resolve({
           ok: false,
-          headers: { get: () => null },
+          headers: new Headers(), // return a real Headers object to prevent TypeError
           json: () => Promise.resolve({})
         });
       });
