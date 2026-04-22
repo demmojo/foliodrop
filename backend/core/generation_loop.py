@@ -194,6 +194,11 @@ async def generate_hybrid_hdr(
 Create a highly polished, stunning real estate listing photo. 
 Ensure the lighting is bright, airy, and balanced. Lift the shadows to reveal details in darker areas, and avoid excessive contrast or crushed blacks. Make wood textures look luxurious without making them too dark.
 
+CRITICAL WINDOW VIEW REQUIREMENT:
+- You MUST preserve the clear, vibrant view through the windows.
+- Draw upon the darker exposure brackets to perfectly expose any exterior scenery (trees, sky, landscape).
+- Do NOT wash out or blow out the windows. Maintain crisp, green foliage and clear exterior details.
+
 CRITICAL CONSTRAINT: Generate HDR image using ONLY:
 - Walls and structural elements from reference
 - Window openings and positions from reference
