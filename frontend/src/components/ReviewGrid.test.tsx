@@ -1,19 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import ReviewGrid from './ReviewGrid';
+import { ProcessedHDR } from '../store/useJobStore';
 
 describe('ReviewGrid Component', () => {
-  const mockPhotos = [
-    { id: '1', url: '1.jpg', listingGroupId: 'group-1', captureTime: '2026-01-01T12:00:00Z', roomName: 'Kitchen' },
-    { id: '2', url: '2.jpg', listingGroupId: 'group-1', captureTime: '2026-01-01T12:05:00Z', roomName: 'Living Room' },
-    { id: '3', url: '3.jpg', listingGroupId: 'group-1', captureTime: '2026-01-01T14:00:00Z', roomName: 'Bedroom' }
+  const mockPhotos: ProcessedHDR[] = [
+    { id: '1', url: '1.jpg', thumbUrl: '1.jpg', originalUrl: '1_orig.jpg', roomName: 'Kitchen', status: 'READY', isFlagged: false },
+    { id: '2', url: '2.jpg', thumbUrl: '2.jpg', originalUrl: '2_orig.jpg', roomName: 'Living Room', status: 'NEEDS_REVIEW', isFlagged: false },
+    { id: '3', url: '3.jpg', thumbUrl: '3.jpg', originalUrl: '3_orig.jpg', roomName: 'Bedroom', status: 'READY', isFlagged: false }
   ];
 
-  it('renders all photos in one listing initially', () => {
-    render(<ReviewGrid initialPhotos={mockPhotos} />);
-    expect(screen.getByText('Property')).toBeInTheDocument();
-    expect(screen.getByText('01')).toBeInTheDocument();
-    expect(screen.queryByText('02')).not.toBeInTheDocument();
+  it('renders all photos', () => {
+    const onConfirmMock = vi.fn();
+    render(<ReviewGrid photos={mockPhotos} onConfirm={onConfirmMock} />);
     
     // Check if rooms are displayed
     expect(screen.getByText('Kitchen')).toBeInTheDocument();
