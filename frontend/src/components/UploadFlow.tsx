@@ -1,5 +1,7 @@
 'use client';
 
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import clsx from 'clsx';
@@ -244,14 +246,64 @@ export default function UploadFlow() {
       setJobs(newJobs);
   };
 
-  const handleFinalExport = () => {
+  const handleFinalExport = async () => {
       const hasUnreviewed = processedPhotos.some(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED');
       if (hasUnreviewed) {
           const proceed = window.confirm("You have unreviewed images in the queue. Exporting will discard them. Proceed?");
           if (!proceed) return;
       }
-      const exportCount = processedPhotos.filter(p => !p.isFlagged && p.status === 'READY').length;
-      showToast(`Preparing ${exportCount} images for download...`);
+      
+      const readyPhotos = processedPhotos.filter(p => !p.isFlagged && p.status === 'READY');
+      const exportCount = readyPhotos.length;
+      
+      if (exportCount === 0) {
+          showToast("No images ready for export.");
+          return;
+      }
+
+      showToast(`Preparing ${exportCount} images for download (ZIP)...`);
+      
+      try {
+          const zip = new JSZip();
+          const folder = zip.folder("folio-export");
+          
+          if (!folder) throw new Error("Failed to create ZIP folder");
+
+          // Fetch all images and add to ZIP
+          const limit = pLimit(3); // Download max 3 in parallel
+          
+          await Promise.all(readyPhotos.map(photo => limit(async () => {
+              const url = photo.url;
+              if (!url) return;
+              
+              try {
+                  const response = await fetch(url);
+                  const blob = await response.blob();
+                  // determine extension from blob type or default to jpg
+                  let ext = 'jpg';
+                  if (blob.type === 'image/png') ext = 'png';
+                  else if (blob.type === 'image/tiff') ext = 'tiff';
+                  
+                  // fallback to original name if available or generated room name
+                  let filename = photo.roomName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                  if (!filename) filename = `scene_${photo.id}`;
+                  
+                  // Ensure uniqueness by appending short id
+                  filename = `${filename}_${photo.id.substring(0,6)}`;
+                  
+                  folder.file(`${filename}.${ext}`, blob);
+              } catch (err) {
+                  console.error(`Failed to download ${url}:`, err);
+              }
+          })));
+          
+          const content = await zip.generateAsync({ type: "blob" });
+          saveAs(content, `folio_export_${new Date().getTime()}.zip`);
+          showToast("Download complete!");
+      } catch (err) {
+          console.error("Export failed", err);
+          showToast("Failed to create ZIP archive.");
+      }
   };
 
   return (
