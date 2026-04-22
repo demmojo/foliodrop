@@ -75,10 +75,31 @@ describe('BeforeAfterSlider Component', () => {
     expect(handle.style.left).toBe('50%');
 
     // Move touch
-    fireEvent.touchMove(window, { touches: [{ clientX: 750 }] });
+    const touchEvent = new TouchEvent('touchmove', {
+      bubbles: true,
+      cancelable: true,
+    });
+    // Add touches property manually since TouchEvent constructor might not support it fully in jsdom
+    Object.defineProperty(touchEvent, 'touches', {
+      value: [{ clientX: 750 }]
+    });
+    const preventDefaultSpy = vi.spyOn(touchEvent, 'preventDefault');
+    fireEvent(window, touchEvent);
+
     expect(handle.style.left).toBe('75%');
+    expect(preventDefaultSpy).toHaveBeenCalled();
 
     // End touch
     fireEvent.touchEnd(window);
+  });
+
+  it('applies object-contain class when objectFit prop is contain', () => {
+    render(<BeforeAfterSlider beforeUrl="before.jpg" afterUrl="after.jpg" objectFit="contain" />);
+    
+    const beforeImg = screen.getByAltText('Original Exposure');
+    const afterImg = screen.getByAltText('Fused HDR Result');
+
+    expect(beforeImg).toHaveClass('object-contain');
+    expect(afterImg).toHaveClass('object-contain');
   });
 });
