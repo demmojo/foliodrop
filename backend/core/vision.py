@@ -56,8 +56,12 @@ def apply_real_estate_heuristics(image_float: np.ndarray) -> np.ndarray:
     # Blur the polished image
     gaussian_blur = cv2.GaussianBlur(polished_float, (0, 0), 1.5)
     # unsharp_mask = original + (original - blur) * amount
-    unsharp = polished_float + (polished_float - gaussian_blur) * 1.2
+    unsharp = polished_float + (polished_float - gaussian_blur) * 0.5
     
+    # Slight gamma correction to lift midtones/shadows before sending to GenAI
+    gamma = 1.2
+    unsharp = np.power(unsharp, 1.0 / gamma)
+
     # Downsample to 8-bit for final JPEG output
     bgr_8_out = np.clip(unsharp * 255.0, 0, 255).astype(np.uint8)
     return bgr_8_out

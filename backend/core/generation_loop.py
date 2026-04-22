@@ -164,7 +164,7 @@ async def generate_hybrid_hdr(
         # Prompt construction
         prompt = """Professional interior architectural photography.
 Create a highly polished, stunning real estate listing photo. 
-Make the colors pop, use dramatic but natural HDR lighting, and make wood textures look luxurious.
+Ensure the lighting is bright, airy, and balanced. Lift the shadows to reveal details in darker areas, and avoid excessive contrast or crushed blacks. Make wood textures look luxurious without making them too dark.
 
 CRITICAL CONSTRAINT: Generate HDR image using ONLY:
 - Walls and structural elements from reference
