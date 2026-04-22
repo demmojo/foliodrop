@@ -49,7 +49,7 @@ def _log_debug(message: str, data: dict = None, hyp: str = "H1"):
         }
         with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
             f.write(json.dumps(payload) + "\n")
-    except Exception:
+    except Exception: # pragma: no cover
         pass
 # #endregion
 

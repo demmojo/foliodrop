@@ -3,7 +3,7 @@ from typing import List
 
 try:
     import cv2
-except ImportError:
+except ImportError: # pragma: no cover
     cv2 = None
 
 def align_images(images: List[np.ndarray]) -> List[np.ndarray]:

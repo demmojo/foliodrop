@@ -16,6 +16,8 @@ def client():
     
     with TestClient(app) as c:
         yield c, db, storage
+        
+    app.dependency_overrides.clear()
 
 def test_upload_style_image(client):
     c, db, storage = client
