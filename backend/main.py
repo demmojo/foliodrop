@@ -38,19 +38,7 @@ app.add_middleware(
 # #region agent log
 import json, time
 def _log_debug(message: str, data: dict = None, hyp: str = "H1"):
-    try:
-        payload = {
-            "sessionId": "769fb2",
-            "hypothesisId": hyp,
-            "location": "backend/main.py",
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time.time() * 1000)
-        }
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
-            f.write(json.dumps(payload) + "\n")
-    except Exception: # pragma: no cover
-        pass
+    pass
 # #endregion
 
 def get_database() -> IDatabase:
@@ -141,13 +129,6 @@ def finalize_job(
 
     use_case = FinalizeJobUseCase(task_queue, db)
     result = use_case.execute(req.session_id, req.idempotency_key, req.files)
-    # #region agent log
-    try:
-        import json, time
-        payload = {"sessionId":"daa93d","hypothesisId":"H1","location":"backend/main.py:finalize_job","message":"finalize_job result","data":{"result": result},"timestamp":int(time.time()*1000)}
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-daa93d.log", "a") as f: f.write(json.dumps(payload) + "\n")
-    except Exception: pass
-    # #endregion
     
     if result.get("status") == "quota_exceeded":
         raise HTTPException(status_code=402, detail=result.get("message", "Monthly quota exceeded"))
@@ -201,13 +182,6 @@ def get_active_jobs(session_id: str, db: IDatabase = Depends(get_database), stor
 
 @app.post("/api/v1/jobs/batch-status")
 def get_batch_status(req: BatchStatusRequest, db: IDatabase = Depends(get_database), storage: IBlobStorage = Depends(get_blob_storage)):
-    # #region agent log
-    try:
-        import json, time
-        payload = {"sessionId":"daa93d","hypothesisId":"H2","location":"backend/main.py:get_batch_status","message":"get_batch_status called","data":{"job_ids": req.job_ids},"timestamp":int(time.time()*1000)}
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-daa93d.log", "a") as f: f.write(json.dumps(payload) + "\n")
-    except Exception: pass
-    # #endregion
     jobs = db.get_jobs(req.job_ids)
     
     response_jobs = []
@@ -230,13 +204,6 @@ def get_batch_status(req: BatchStatusRequest, db: IDatabase = Depends(get_databa
                 job_status["result"]["original_url"] = storage.generate_signed_url(job["result"]["original_blob_path"])
                 
         response_jobs.append(job_status)
-        # #region agent log
-        try:
-            import json, time
-            payload = {"sessionId":"daa93d","hypothesisId":"H2","location":"backend/main.py:get_batch_status","message":"job status item","data":{"id": job_status["id"], "status": job_status["status"]},"timestamp":int(time.time()*1000)}
-            with open("/home/demmojo/real-estate-hdr/.cursor/debug-daa93d.log", "a") as f: f.write(json.dumps(payload) + "\n")
-        except Exception: pass
-        # #endregion
         
     return JSONResponse(
         content={"jobs": response_jobs},

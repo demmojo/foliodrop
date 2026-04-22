@@ -71,28 +71,26 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
       onMouseDown={startDrag}
       onTouchStart={startDrag}
     >
-      {/* Before Image (Bottom Layer) */}
+      {/* After Image (Bottom Layer) */}
       <img 
-        src={beforeUrl} 
-        alt="Original Exposure"
+        src={afterUrl} 
+        alt="Fused HDR Result"
         className={clsx("absolute inset-0 w-full h-full pointer-events-none", objectFit === 'cover' ? 'object-cover' : 'object-contain')}
-        crossOrigin="anonymous"
         loading="lazy"
       />
       
-      {/* After Image (Top Layer) - Clipped */}
+      {/* Before Image (Top Layer) - Clipped */}
       <div 
         className="absolute inset-0 w-full h-full"
         style={{ clipPath: `polygon(0 0, ${sliderPosition}% 0, ${sliderPosition}% 100%, 0 100%)` }}
       >
         <img 
-          src={afterUrl} 
-          alt="Fused HDR Result"
+          src={beforeUrl} 
+          alt="Original Exposure"
           className={clsx(
             "absolute inset-0 w-full h-full pointer-events-none",
             objectFit === 'cover' ? 'object-cover' : 'object-contain'
           )}
-          crossOrigin="anonymous"
           loading="lazy"
         />
       </div>

@@ -110,14 +110,25 @@ def test_process_job_task():
     assert resp.json()["status"] == "error"
     
 def test_get_active_jobs():
+    from backend.main import get_database
+    db = get_database()
+    db.save_job("job_active_1", "session", "COMPLETED", "key_active_1", result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"})
+    db.save_job("job_active_2", "session", "COMPLETED", "key_active_2") # no result
+    db.save_job("job_active_3", "session", "COMPLETED", "key_active_3", result={"thumb_blob_path": "b"}) # no blob
+    db.save_job("job_active_4", "session", "COMPLETED", "key_active_4", result={"blob_path": "a", "original_blob_path": "c"}) # no thumb
+    db.save_job("job_active_5", "session", "COMPLETED", "key_active_5", result={"blob_path": "a", "thumb_blob_path": "b"}) # no original
+    
     resp = client.get("/api/v1/jobs/active?session_id=session")
     assert resp.status_code == 200
+    jobs = resp.json()["jobs"]
+    assert len(jobs) == 5
+    assert "original_url" in jobs[0]["result"]
 
 def test_batch_status():
     from backend.main import get_database
     db = get_database()
     db.save_job("job_batch_1", "session", "PENDING", "key_batch_1")
-    db.save_job("job_batch_2", "session", "COMPLETED", "key_batch_2", result={"blob_path": "a", "thumb_blob_path": "b"})
+    db.save_job("job_batch_2", "session", "COMPLETED", "key_batch_2", result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"})
     db.save_job("job_batch_3", "session", "COMPLETED", "key_batch_3", result={"blob_path": "a"}) # no thumb
     db.save_job("job_batch_4", "session", "COMPLETED", "key_batch_4", result={"thumb_blob_path": "b"}) # no blob
     
