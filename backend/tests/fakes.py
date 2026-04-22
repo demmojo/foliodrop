@@ -79,6 +79,23 @@ class FakeDatabase(IDatabase):
         pairs = self.training_pairs.setdefault(agency_id, [])
         pairs.append({"brackets": bracket_paths, "final": final_path})
 
+    def check_session_code_availability(self, code: str) -> bool:
+        if code in self.sessions:
+            created_at = self.sessions[code].get("created_at")
+            if created_at:
+                from datetime import datetime, timezone, timedelta
+                if datetime.now(timezone.utc) - created_at < timedelta(days=90):
+                    return False
+        return True
+
+    def reserve_session_code(self, code: str) -> bool:
+        from datetime import datetime, timezone
+        if code not in self.sessions:
+            self.sessions[code] = {}
+        self.sessions[code]["created_at"] = datetime.now(timezone.utc)
+        self.sessions[code]["reserved"] = True
+        return True
+
 class FakeBlobStorage(IBlobStorage):
     def generate_upload_urls(self, session_id: str, files: List[str]) -> List[dict]:
         return [{"file": f, "url": f"https://fake-upload/{f}", "path": f"{session_id}/{f}"} for f in files]

@@ -24,6 +24,10 @@ export default function UploadFlow() {
   const [photoGroups, setPhotoGroups] = useState<PhotoGroup[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<PhotoMeta[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
+  const [recentSessions, setRecentSessions] = useState<{id: string, date: number, count: number}[]>([]);
+  const [showAllSessions, setShowAllSessions] = useState(false);
+  const [sessionCode, setSessionCode] = useState<string>('');
+  const [sessionCodeError, setSessionCodeError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get('session');
@@ -34,6 +38,24 @@ export default function UploadFlow() {
   useEffect(() => {
     fetchQuota();
   }, [fetchQuota]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('hdr_recent_sessions');
+      if (stored) setRecentSessions(JSON.parse(stored));
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    if (flowState === 'IDLE' && !activeSessionId && !sessionCode) {
+      fetch(`${API_URL}/api/v1/sessions/generate`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.code) setSessionCode(data.code);
+        })
+        .catch(console.error);
+    }
+  }, [flowState, activeSessionId, sessionCode, API_URL]);
 
   // Derived state for processed photos
   const processedPhotos = Object.values(jobs)
@@ -150,8 +172,35 @@ export default function UploadFlow() {
     setUploadProgress({ total: uploadedFiles.length, completed: 0, failed: 0 });
 
     try {
-      const sid = crypto.randomUUID();
+      if (sessionCode.length < 6) {
+         showToast("Room code must be at least 6 characters.");
+         setFlowState('IDLE');
+         return;
+      }
+      
+      const valRes = await fetch(`${API_URL}/api/v1/sessions/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: sessionCode })
+      });
+      const valData = await valRes.json();
+      if (!valData.valid) {
+         setSessionCodeError(valData.message);
+         if (valData.suggested) setSessionCode(valData.suggested);
+         showToast("Session code unavailable. Please check the suggested code.");
+         setFlowState('IDLE');
+         return;
+      }
+      
+      const sid = sessionCode;
       setSessionId(sid);
+      
+      const newSession = { id: sid, date: Date.now(), count: estRooms };
+      const updatedSessions = [newSession, ...recentSessions].slice(0, 20);
+      setRecentSessions(updatedSessions);
+      try {
+        localStorage.setItem('hdr_recent_sessions', JSON.stringify(updatedSessions));
+      } catch (e) {}
       
       // Ensure unique filenames by prefixing index
       const filePayloads = uploadedFiles.map((meta, idx) => {
@@ -350,7 +399,15 @@ export default function UploadFlow() {
   };
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto flex flex-col items-center justify-center min-h-[calc(100dvh-8rem)] px-4 pb-safe pt-safe sm:pb-12 sm:pt-8">
+    <div className="w-full max-w-[1600px] mx-auto flex flex-col items-center justify-center min-h-[calc(100dvh-8rem)] px-4 pb-safe pt-safe sm:pb-12 sm:pt-8 relative">
+      {/* ALWAYS VISIBLE SESSION CODE */}
+      {(sessionCode || activeSessionId) && flowState !== 'IDLE' && (
+        <div className="fixed top-4 right-4 sm:top-8 sm:right-8 z-40 bg-surface/80 backdrop-blur border border-border px-4 py-2 rounded-full shadow-sm flex items-center gap-3">
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted">Room Code</span>
+          <code className="text-sm font-mono font-medium text-foreground">{activeSessionId || sessionCode}</code>
+        </div>
+      )}
+
       {/* GLOBAL DRAG OVERLAY */}
       {isDragging && flowState === 'IDLE' && (
         <div 
@@ -412,6 +469,108 @@ export default function UploadFlow() {
                 Select Photos
               </label>
             </div>
+          </div>
+          
+          <div className="mt-16 w-full max-w-md pt-8 border-t border-border flex flex-col items-center gap-4">
+            <h3 className="text-sm font-medium text-foreground">Room / Session Code</h3>
+            <div className="flex w-full gap-2">
+              <input
+                type="text"
+                value={sessionCode}
+                onChange={(e) => {
+                  setSessionCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                  setSessionCodeError(null);
+                }}
+                onBlur={async () => {
+                  if (!sessionCode || sessionCode.length < 6) {
+                    setSessionCodeError("Must be at least 6 characters.");
+                    return;
+                  }
+                  try {
+                    const res = await fetch(`${API_URL}/api/v1/sessions/validate`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ code: sessionCode })
+                    });
+                    const data = await res.json();
+                    if (!data.valid) {
+                      setSessionCodeError(data.message || "Code unavailable.");
+                      if (data.suggested) {
+                        setSessionCode(data.suggested);
+                        setSessionCodeError(`Unavailable. We've suggested: ${data.suggested}`);
+                      }
+                    }
+                  } catch (e) {
+                     console.error(e);
+                  }
+                }}
+                placeholder="Enter new or existing code"
+                className="flex-1 bg-surface border border-border rounded-lg px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 font-mono text-center"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (sessionCode) handleResumeSession(sessionCode);
+                  }
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (sessionCode) handleResumeSession(sessionCode);
+                }}
+                className="px-4 py-2 bg-foreground text-background rounded-lg text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all"
+              >
+                Resume
+              </button>
+            </div>
+            {sessionCodeError && <p className="text-xs text-amber-500 mt-1">{sessionCodeError}</p>}
+            <p className="text-[11px] text-muted text-center max-w-[300px] mt-1">
+              Start an upload with this code, or enter an existing one to resume. Codes expire in 30 days.
+            </p>
+
+            {recentSessions.length > 0 && (
+              <div className="w-full mt-6 flex flex-col gap-2">
+                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Recent Sessions</h4>
+                <div className="flex flex-col gap-2 relative">
+                  {recentSessions.slice(0, showAllSessions ? recentSessions.length : 2).map((session, i) => (
+                    <button
+                      key={session.id}
+                      onClick={() => handleResumeSession(session.id)}
+                      className={clsx(
+                        "flex items-center justify-between px-4 py-3 bg-surface border border-border rounded-lg hover:bg-muted/5 transition-all text-left group relative z-10",
+                        !showAllSessions && i === 1 && recentSessions.length > 2 && "opacity-40 hover:opacity-100"
+                      )}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-foreground">
+                          {new Date(session.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                        <span className="text-xs text-muted font-mono">{session.id}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-medium bg-foreground/5 text-foreground px-2 py-1 rounded border border-border/50">
+                          {session.count} {session.count === 1 ? 'scene' : 'scenes'}
+                        </span>
+                        <div className="w-6 h-6 rounded-full bg-foreground/5 border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-foreground text-xs font-medium">→</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  
+                  {!showAllSessions && recentSessions.length > 2 && (
+                    <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-background to-transparent z-20 pointer-events-none" />
+                  )}
+                </div>
+                
+                {!showAllSessions && recentSessions.length > 2 && (
+                  <button
+                    onClick={() => setShowAllSessions(true)}
+                    className="text-xs text-muted hover:text-foreground font-medium mt-2 transition-colors py-1 z-30"
+                  >
+                    Show {recentSessions.length - 2} more sessions
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 max-w-4xl text-center px-4">

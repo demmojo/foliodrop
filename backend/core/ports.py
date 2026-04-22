@@ -18,6 +18,9 @@ class IDatabase(Protocol):
     def save_style_image(self, agency_id: str, blob_path: str) -> List[str]: ... # pragma: no cover
     def get_style_images(self, agency_id: str) -> List[str]: ... # pragma: no cover
     def save_training_pair(self, agency_id: str, bracket_paths: List[str], final_path: str) -> None: ... # pragma: no cover
+    
+    def check_session_code_availability(self, code: str) -> bool: ... # pragma: no cover
+    def reserve_session_code(self, code: str) -> bool: ... # pragma: no cover
 
 class IBlobStorage(Protocol):
     def generate_upload_urls(self, session_id: str, files: List[str]) -> List[dict]: ... # pragma: no cover

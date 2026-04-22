@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useJobStore } from '../store/useJobStore';
-import { Info, Loader2 } from 'lucide-react';
+import { Info, Loader2, Copy, Check } from 'lucide-react';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
@@ -18,6 +18,7 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
   const [realProgress, setRealProgress] = useState<number>(0);
   const [displayProgress, setDisplayProgress] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState<string>("Analyzing image structures");
+  const [hasCopied, setHasCopied] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -109,10 +110,34 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
          <div>
             <h4 className="text-sm font-semibold text-foreground mb-1">Safe to leave this page</h4>
             <p className="text-xs text-muted leading-relaxed font-medium">
-               Generative processing takes time. We&apos;ll handle everything in the background and notify you when your 16-bit TIFFs and MLS JPEGs are ready.
+               Generative processing takes time. We&apos;ll handle everything in the background. You can use your session code to resume later.
             </p>
          </div>
       </div>
+
+      {sessionId && (
+        <div className="mt-8 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
+           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Session Code (Valid for 30 days)</p>
+           <div className="flex items-center gap-2 bg-surface border border-border pl-4 pr-1 py-1 rounded-full shadow-sm">
+             <code className="text-sm font-mono text-foreground font-medium select-all">{sessionId}</code>
+             <button
+               onClick={() => {
+                 navigator.clipboard.writeText(sessionId);
+                 setHasCopied(true);
+                 setTimeout(() => setHasCopied(false), 2000);
+               }}
+               className="p-2 hover:bg-foreground/5 rounded-full transition-colors ml-2"
+               title="Copy to clipboard"
+             >
+               {hasCopied ? (
+                 <Check className="w-4 h-4 text-emerald-500" />
+               ) : (
+                 <Copy className="w-4 h-4 text-muted hover:text-foreground" />
+               )}
+             </button>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

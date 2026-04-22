@@ -131,6 +131,26 @@ class FirestoreAdapter(IDatabase):
             "created_at": now
         })
 
+    def check_session_code_availability(self, code: str) -> bool:
+        doc = self.db.collection("sessions").document(code).get()
+        if doc.exists:
+            data = doc.to_dict()
+            created_at = data.get("created_at")
+            if created_at:
+                from datetime import datetime, timezone, timedelta
+                # created_at might be DatetimeWithNanoseconds
+                if datetime.now(timezone.utc) - created_at < timedelta(days=90):
+                    return False
+        return True
+
+    def reserve_session_code(self, code: str) -> bool:
+        from firebase_admin import firestore
+        self.db.collection("sessions").document(code).set({
+            "created_at": firestore.SERVER_TIMESTAMP,
+            "reserved": True
+        }, merge=True)
+        return True
+
 class GCSBlobStorageAdapter(IBlobStorage):
     def __init__(self, bucket_name: str):
         self.client = storage.Client()

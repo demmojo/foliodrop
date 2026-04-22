@@ -105,6 +105,46 @@ class BatchSignedUrlRequest(BaseModel):
 # -----------------------------------------------------------------------------
 # Endpoints
 # -----------------------------------------------------------------------------
+import random
+
+CITIES = ["paris", "venice", "milan", "kyoto", "rome", "prague", "dubai", "tokyo", "seoul", "oslo", "lima", "cairo"]
+STYLES = ["gothic", "deco", "modern", "tudor", "roman", "ionic", "rustic", "chalet"]
+ANIMALS = ["panda", "koala", "otter", "quokka", "fox", "owl", "seal", "swan", "fawn", "puma", "lynx", "mink"]
+
+def generate_random_code():
+    word = random.choice(CITIES + STYLES + ANIMALS)
+    num = random.randint(100, 999) if len(word) < 4 else random.randint(10, 99)
+    return f"{word}{num}"
+
+@app.get("/api/v1/sessions/generate")
+def generate_session(db: IDatabase = Depends(get_database)):
+    for _ in range(10):
+        code = generate_random_code()
+        if db.check_session_code_availability(code):
+            db.reserve_session_code(code)
+            return {"code": code}
+    raise HTTPException(status_code=500, detail="Failed to generate session code")
+
+class ValidateSessionRequest(BaseModel):
+    code: str
+
+@app.post("/api/v1/sessions/validate")
+def validate_session(req: ValidateSessionRequest, db: IDatabase = Depends(get_database)):
+    if len(req.code) < 6:
+        return {"valid": False, "message": "Code must be at least 6 letters", "suggested": generate_random_code()}
+    
+    if db.check_session_code_availability(req.code):
+        db.reserve_session_code(req.code)
+        return {"valid": True}
+    
+    # generate a suggested one
+    for _ in range(10):
+        code = generate_random_code()
+        if db.check_session_code_availability(code):
+            return {"valid": False, "message": "Code is unavailable", "suggested": code}
+            
+    return {"valid": False, "message": "Code is unavailable", "suggested": None}
+
 @app.post("/api/v1/upload-urls")
 def generate_upload_urls(req: UploadUrlRequest, storage: IBlobStorage = Depends(get_blob_storage)):
     use_case = GenerateUploadUrlsUseCase(storage)
