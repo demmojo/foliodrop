@@ -21,7 +21,7 @@ describe('ProcessingConsole Component', () => {
     render(<ProcessingConsole sessionId="sess1" expectedRooms={2} onComplete={vi.fn()} />);
     
     expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
-    expect(screen.getByText('Aligning structural details...')).toBeInTheDocument();
+    expect(screen.getByText('status_aligning...')).toBeInTheDocument();
   });
 
   it('updates progress when jobs complete and triggers onComplete', () => {
@@ -52,14 +52,14 @@ describe('ProcessingConsole Component', () => {
     render(<ProcessingConsole sessionId="sess1" expectedRooms={2} onComplete={vi.fn()} />);
     
     // Initial display progress is 5%
-    expect(screen.getByText('Aligning structural details...')).toBeInTheDocument();
+    expect(screen.getByText('status_aligning...')).toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(60000); // Wait 60 seconds
     });
 
     // Should creep past 20%
-    expect(screen.getByText('Fusing dynamic range...')).toBeInTheDocument();
+    expect(screen.getByText('status_masking...')).toBeInTheDocument();
 
     // Now let's simulate some actual jobs finishing to bump realProgress
     act(() => {
@@ -77,6 +77,6 @@ describe('ProcessingConsole Component', () => {
     });
 
     // Should creep past 50%
-    expect(screen.getByText('Generative tone mapping...')).toBeInTheDocument();
+    expect(screen.getByText('status_fusing...')).toBeInTheDocument();
   });
 });

@@ -69,10 +69,10 @@ export default function ProcessingConsole({ sessionId, expectedRooms = 1, onComp
   useEffect(() => {
       if (displayProgress >= 100) return;
       
-      if (displayProgress < 20) setStatusMessage("Aligning structural details");
-      else if (displayProgress < 50) setStatusMessage("Fusing dynamic range");
-      else if (displayProgress < 80) setStatusMessage("Generative tone mapping");
-      else setStatusMessage("Applying geometry corrections");
+      if (displayProgress < 20) setStatusMessage(t('status_aligning'));
+      else if (displayProgress < 50) setStatusMessage(t('status_masking'));
+      else if (displayProgress < 80) setStatusMessage(t('status_fusing'));
+      else setStatusMessage(t('status_denoising'));
   }, [displayProgress]);
 
   return (

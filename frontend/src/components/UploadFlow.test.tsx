@@ -121,7 +121,7 @@ describe('UploadFlow Component', () => {
     });
     
     await waitFor(() => {
-      expect(screen.getByText(/Only JPEG, PNG, HEIC, and TIFF formats are supported/)).toBeInTheDocument();
+      expect(screen.getByText(/RAW processing is currently not supported/)).toBeInTheDocument();
     });
     
     // Stays in IDLE

@@ -128,7 +128,7 @@ export default function UploadFlow() {
     });
     
     if (files.length === 0) {
-        if (allFiles.length > 0) showToast("Only JPEG, PNG, HEIC, and TIFF formats are supported. Please convert RAW files.");
+        if (allFiles.length > 0) showToast("RAW processing is currently not supported. Please upload JPEG, PNG, or HEIC files.");
         return;
     }
 
@@ -419,7 +419,7 @@ export default function UploadFlow() {
               <UploadCloud className="w-10 h-10 text-white" />
             </div>
             <h2 className="text-3xl font-medium text-white tracking-tight">Drop folders to import</h2>
-            <p className="text-white/60 font-medium">RAW processing currently not supported. Drop JPEGs/TIFFs.</p>
+            <p className="text-white/60 font-medium">RAW processing is currently not supported. Please drop JPEGs, TIFFs, or HEIC files.</p>
           </div>
         </div>
       )}
@@ -577,17 +577,17 @@ export default function UploadFlow() {
              <div className="flex flex-col items-center gap-3">
                 <Layers className="w-6 h-6 text-muted" />
                 <h3 className="text-sm font-semibold text-foreground">Intelligent Grouping</h3>
-                <p className="text-xs text-muted leading-relaxed">Time-based EXIF detection automatically organizes your 3, 5, or 7 bracket sets instantly.</p>
+                <p className="text-xs text-muted leading-relaxed">We read the capture time in your photos&apos; EXIF data to automatically group 3, 5, or 7 bracket sets into scenes.</p>
              </div>
              <div className="flex flex-col items-center gap-3">
-                <div className="w-6 h-6 rounded flex items-center justify-center border border-muted text-muted text-[10px] font-bold">HDR</div>
-                <h3 className="text-sm font-semibold text-foreground">Zero-Halo Fusion</h3>
-                <p className="text-xs text-muted leading-relaxed">Structural OpenCV alignment ensures window pulls and deep shadows remain perfectly sharp.</p>
+                <div className="w-6 h-6 rounded flex items-center justify-center border border-muted text-muted text-[10px] font-bold">AI</div>
+                <h3 className="text-sm font-semibold text-foreground">Generative Hybrid Pipeline</h3>
+                <p className="text-xs text-muted leading-relaxed">We blend OpenCV structural alignment with Generative AI to preserve crisp window views and natural shadows without halos.</p>
              </div>
              <div className="flex flex-col items-center gap-3">
                 <CheckCircle2 className="w-6 h-6 text-muted" />
                 <h3 className="text-sm font-semibold text-foreground">MLS Optimized Output</h3>
-                <p className="text-xs text-muted leading-relaxed">Final images are intelligently tone-mapped and sized for pristine Multiple Listing Service delivery.</p>
+                <p className="text-xs text-muted leading-relaxed">Final images are rendered at 2K resolution&mdash;perfectly sized and optimized for Multiple Listing Service (MLS) delivery.</p>
              </div>
           </div>
         </div>
