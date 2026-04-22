@@ -680,6 +680,9 @@ describe('UploadFlow Component', () => {
   it('handles starting a new room', async () => {
     useJobStore.setState({ activeSessionId: null, flowState: 'IDLE' });
     
+    // Reset any pending room code state manually since we are outside the component
+    localStorage.removeItem('hdr_room_code');
+
     const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((url: string) => {
       if (url.includes('/api/v1/sessions/generate')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ code: 'new-room-123' }) } as any);
@@ -691,16 +694,23 @@ describe('UploadFlow Component', () => {
       render(<UploadFlow />);
     });
     
+    // Clear initial mount fetches
+    fetchSpy.mockClear();
+
     const startNewBtn = screen.getByText('Start a new room');
 
     await act(async () => {
       fireEvent.click(startNewBtn);
     });
 
-    await new Promise(r => setTimeout(r, 0));
+    // Give state effect a moment to run
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 10));
+    });
     
-    const generateCall = fetchSpy.mock.calls.find(call => String(call[0]).includes('/api/v1/sessions/generate'));
-    expect(generateCall).toBeTruthy();
+    // Check if fetch was called with generate
+    const generateCall = fetchSpy.mock.calls.filter(call => String(call[0]).includes('/api/v1/sessions/generate'));
+    expect(generateCall.length).toBeGreaterThan(0);
     
     fetchSpy.mockRestore();
   });

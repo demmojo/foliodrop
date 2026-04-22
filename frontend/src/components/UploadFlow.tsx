@@ -444,25 +444,17 @@ export default function UploadFlow() {
               >
                 Continue in {pendingRoomCode}
               </button>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('hdr_room_code');
-                  setPendingRoomCode(null);
-                  setShowResumePrompt(false);
-                  fetch(`${API_URL}/api/v1/sessions/generate`)
-                    .then(res => res.json())
-                    .then(data => {
-                      if (data.code) {
-                        setSessionCode(data.code);
-                        localStorage.setItem('hdr_room_code', data.code);
-                      }
-                    })
-                    .catch(console.error);
-                }}
-                className="w-full py-3 bg-surface border border-border text-foreground rounded-full font-semibold hover:bg-muted/5 active:scale-95 transition-all"
-              >
-                Start a New Room
-              </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem('hdr_room_code');
+                setPendingRoomCode(null);
+                setShowResumePrompt(false);
+                // Let the useEffect handle the generation
+              }}
+              className="w-full py-3 bg-surface border border-border text-foreground rounded-full font-semibold hover:bg-muted/5 active:scale-95 transition-all"
+            >
+              Start a New Room
+            </button>
             </div>
           </div>
         </div>
@@ -551,6 +543,11 @@ export default function UploadFlow() {
                     setSessionCodeError("Must be at least 6 characters.");
                     return;
                   }
+                  
+                  // Don't validate if it's the exact code we just generated or auto-loaded
+                  const storedRoomCode = localStorage.getItem('hdr_room_code');
+                  if (sessionCode === storedRoomCode) return;
+                  
                   try {
                     const res = await fetch(`${API_URL}/api/v1/sessions/validate`, {
                       method: 'POST',
@@ -600,15 +597,7 @@ export default function UploadFlow() {
               onClick={() => {
                 localStorage.removeItem('hdr_room_code');
                 setSessionCode('');
-                fetch(`${API_URL}/api/v1/sessions/generate`)
-                  .then(res => res.json())
-                  .then(data => {
-                    if (data.code) {
-                      setSessionCode(data.code);
-                      localStorage.setItem('hdr_room_code', data.code);
-                    }
-                  })
-                  .catch(console.error);
+                // Let the useEffect handle the generation
               }}
               className="text-xs text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors mt-2"
             >
