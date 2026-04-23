@@ -127,6 +127,7 @@ describe('SmartSaveSheet Component', () => {
   });
 
   it('handles custom tag submission with empty and valid strings', async () => {
+    randomSpy.mockReturnValue(0.5);
     vi.useFakeTimers();
     const onCloseMock = vi.fn();
     render(<SmartSaveSheet isOpen={true} onClose={onCloseMock} />);
