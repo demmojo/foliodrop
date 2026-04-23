@@ -13,8 +13,8 @@
     "test": "npm run test:backend && npm run test:frontend",
     "build:frontend": "cd frontend && npm run build",
     "build": "npm run build:frontend",
-    "deploy:frontend": "gcloud run deploy real-estate-hdr-frontend --source ./frontend --region us-central1 --project demmojo-real-estate-hdr --allow-unauthenticated",
-    "deploy:backend": "gcloud run deploy real-estate-hdr-backend --source ./backend --region us-central1 --project demmojo-real-estate-hdr --allow-unauthenticated",
+    "deploy:frontend": "gcloud run deploy hdr-frontend --source ./frontend --region us-central1 --project development-resources-488110 --allow-unauthenticated",
+    "deploy:backend": "gcloud run deploy hdr-worker --source ./backend --region us-central1 --project development-resources-488110 --allow-unauthenticated",
     "deploy": "npm run deploy:backend && npm run deploy:frontend"
   },
   "keywords": [],
