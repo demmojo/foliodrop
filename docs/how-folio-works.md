@@ -11,6 +11,7 @@
 
 - **Zero-Friction Import:** Full-viewport dropzone accepting JPEGs, TIFFs, and HEICs with immediate local file validation.
 - **On-Device EXIF Parsing:** Before any data leaves the device, the browser securely extracts capture time, exposure compensation (EV), aperture (f-stop), and ISO.
+- **Intelligent Room Identification:** During the processing pipeline, Folio employs AI Room Tagging strategies to automatically identify spaces. Using the Gemini Vision API or on-device models, it analyzes the merged image and metadata to tag scenes (e.g., "Kitchen", "Primary Bedroom") seamlessly.
 - **Deterministic Scene Grouping:** The algorithm intelligently groups continuous rapid-fire shots into 3, 5, or 7-bracket scenes based on microsecond time gaps.
 - **Visual AI Fallback:** If images lack EXIF data, the client generates lightweight thumbnails to visually cluster photos by room angle and composition without blocking the upload pipeline.
 
