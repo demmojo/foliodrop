@@ -83,6 +83,15 @@ class FirestoreAdapter(IDatabase):
             results.extend([doc.to_dict() for doc in docs])
         return results
 
+    def get_cached_group(self, group_hash: str) -> Optional[dict]:
+        doc = self.db.collection("group_cache").document(group_hash).get()
+        if doc.exists:
+            return doc.to_dict()
+        return None
+
+    def save_cached_group(self, group_hash: str, result: dict) -> None:
+        self.db.collection("group_cache").document(group_hash).set(result, merge=True)
+
     def get_agency_quota(self, agency_id: str) -> dict:
         doc = self.db.collection("quotas").document(agency_id).get()
         if doc.exists:

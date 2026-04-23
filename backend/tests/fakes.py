@@ -47,6 +47,16 @@ class FakeDatabase(IDatabase):
     def get_jobs(self, job_ids: List[str]) -> List[dict]:
         return [self.jobs[jid] for jid in job_ids if jid in self.jobs]
 
+    def get_cached_group(self, group_hash: str) -> Optional[dict]:
+        if not hasattr(self, 'group_cache'):
+            self.group_cache = {}
+        return self.group_cache.get(group_hash)
+
+    def save_cached_group(self, group_hash: str, result: dict):
+        if not hasattr(self, 'group_cache'):
+            self.group_cache = {}
+        self.group_cache[group_hash] = result
+
     def get_agency_quota(self, agency_id: str) -> dict:
         return self.quotas.get(agency_id, {"used": 0.0, "limit": 50.0})
 

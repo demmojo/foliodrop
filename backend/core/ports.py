@@ -12,6 +12,10 @@ class IDatabase(Protocol):
     def get_job_by_idempotency_key(self, idempotency_key: str) -> Optional[dict]: ... # pragma: no cover
     def get_active_jobs(self, session_id: str) -> List[dict]: ... # pragma: no cover
     def get_jobs(self, job_ids: List[str]) -> List[dict]: ... # pragma: no cover
+    
+    # Caching methods
+    def get_cached_group(self, group_hash: str) -> Optional[dict]: ... # pragma: no cover
+    def save_cached_group(self, group_hash: str, result: dict): ... # pragma: no cover
 
     def get_agency_quota(self, agency_id: str) -> dict: ... # pragma: no cover
     def increment_quota_usage(self, agency_id: str, amount: float) -> bool: ... # pragma: no cover
