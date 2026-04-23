@@ -628,7 +628,7 @@ export default function UploadFlow() {
           
           <div className="mt-16 w-full max-w-md pt-8 border-t border-border flex flex-col items-center gap-4 relative z-10">
             <h3 className="text-sm font-medium text-foreground">Room Code</h3>
-            <div className="relative w-full max-w-[320px]">
+                <div className="flex w-full max-w-[400px] gap-2 items-center justify-center">
               <input
                 type="text"
                 value={sessionCode}
@@ -641,8 +641,8 @@ export default function UploadFlow() {
                     setSessionCodeError("Must be at least 3 characters.");
                   }
                 }}
-                placeholder="Enter room code"
-                className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 font-mono text-center"
+                placeholder="Room code"
+                className="flex-1 min-w-0 bg-surface border border-border rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 font-mono text-center"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     if (sessionCode) handleResumeSession(sessionCode);
@@ -655,7 +655,7 @@ export default function UploadFlow() {
                 onClick={() => {
                   if (sessionCode) handleResumeSession(sessionCode);
                 }}
-                className="absolute right-1 top-1 bottom-1 px-4 bg-foreground text-background rounded-md text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all whitespace-nowrap"
+                className="px-6 py-2.5 bg-foreground text-background rounded-lg text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all whitespace-nowrap"
               >
                 Resume
               </button>

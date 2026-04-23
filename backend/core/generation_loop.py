@@ -93,7 +93,7 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
     
     # Homography via MAGSAC++
-    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.USAC_MAGSAC, 5.0)
+    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.USAC_MAGSAC, 8.0)
     if M is None or mask is None:
         _log_debug("generation_loop.py:74", "Homography matrix or mask is None", {"M_is_none": M is None, "mask_is_none": mask is None}, "H3")
         return False, 0.0, 1.0
@@ -137,42 +137,14 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
 
 async def generate_hybrid_hdr(
     client: genai.Client,
-    fused_base_bytes: bytes,
-    bracket_bytes_list: List[bytes],
+    fused_file: types.File,
+    bracket_files: List[types.File],
     retry_count: int = 0,
     style_urls: List[str] = None,
     training_pairs: List[dict] = None
 ) -> Tuple[bytes, dict]:
     
-    uploaded_files = []
-    
     try:
-        # Upload images via Gemini Files API
-        def upload(b, name):
-            import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                tmp.write(b)
-                tmp_path = tmp.name
-            
-            # The older Google GenAI SDK used name/display_name arguments inconsistently.
-            # `file` is the local file path. It automatically figures out mime type.
-            try:
-                f = client.files.upload(file=tmp_path, config={"display_name": name})
-            except Exception:
-                f = client.files.upload(file=tmp_path)
-            
-            os.remove(tmp_path)
-            return f
-            
-        fused_file = await asyncio.to_thread(upload, fused_base_bytes, "fused_base.jpg")
-        uploaded_files.append(fused_file)
-        
-        bracket_files = []
-        for i, bb in enumerate(bracket_bytes_list):
-            bf = await asyncio.to_thread(upload, bb, f"bracket_{i}.jpg")
-            uploaded_files.append(bf)
-            bracket_files.append(bf)
-            
         # Multimodal Payload Sequencing: Interleaved Labeling
         # Based on Leeroopedia best practices for structural conditioning:
         # Reference first, brackets middle, strict constraints last.
@@ -224,7 +196,7 @@ DO NOT add, remove, or modify any room structure not present in inputs."""
         # Safety configuration based on Leeroopedia ML best practices
         config = types.GenerateContentConfig(
             response_modalities=["IMAGE"],
-            temperature=0.2, # Lower temperature for structural fidelity
+            temperature=0.0, # Lower temperature for structural fidelity
             safety_settings=[
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
@@ -260,12 +232,7 @@ DO NOT add, remove, or modify any room structure not present in inputs."""
                 
         raise GenerationError("No image returned by model")
         
-    finally:
-        # CRITICAL Files Quota Limit Cleanup
-        for f in uploaded_files:
-            try:
-                await asyncio.to_thread(client.files.delete, name=f.name)
-            except Exception as e:
-                logger.warning(f"Failed to delete Gemini file {f.name}: {e}")
+    except Exception as e:
+        raise e
                 
 

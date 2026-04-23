@@ -86,21 +86,33 @@ class FirestoreAdapter(IDatabase):
     def get_agency_quota(self, agency_id: str) -> dict:
         doc = self.db.collection("quotas").document(agency_id).get()
         if doc.exists:
-            return doc.to_dict()
-        return {"used": 0, "limit": 3000}
+            data = doc.to_dict()
+            if data.get("limit") == 3000:
+                data["limit"] = 50.0
+                data["used"] = 0.0
+            return data
+        return {"used": 0.0, "limit": 50.0}
 
-    def increment_quota_usage(self, agency_id: str, amount: int) -> bool:
+    def increment_quota_usage(self, agency_id: str, amount: float) -> bool:
         doc_ref = self.db.collection("quotas").document(agency_id)
         doc = doc_ref.get()
         if doc.exists:
             data = doc.to_dict()
-            if data.get("used", 0) + amount > data.get("limit", 3000):
+            limit = data.get("limit", 50.0)
+            used = data.get("used", 0.0)
+            
+            # Auto-migrate legacy generation-based quotas
+            if limit == 3000:
+                limit = 50.0
+                used = 0.0
+
+            if used + amount > limit:
                 return False
-            doc_ref.update({"used": data.get("used", 0) + amount})
+            doc_ref.update({"used": used + amount, "limit": limit})
         else:
-            if amount > 3000:
+            if amount > 50.0:
                 return False
-            doc_ref.set({"used": amount, "limit": 3000})
+            doc_ref.set({"used": amount, "limit": 50.0})
         return True
 
     def save_style_image(self, agency_id: str, blob_path: str) -> List[str]:

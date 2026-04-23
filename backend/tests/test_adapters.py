@@ -62,17 +62,17 @@ def test_firestore_adapter():
         assert adapter.get_agency_quota("ag1") == {"used": 10, "limit": 100}
         
         mock_doc.exists = False
-        assert adapter.get_agency_quota("ag2") == {"used": 0, "limit": 3000}
+        assert adapter.get_agency_quota("ag2") == {"used": 0.0, "limit": 50.0}
         
         # Test increment_quota_usage
         mock_doc.exists = True
-        assert adapter.increment_quota_usage("ag1", 10) == True
-        mock_doc.to_dict.return_value = {"used": 95, "limit": 100}
-        assert adapter.increment_quota_usage("ag1", 10) == False
+        assert adapter.increment_quota_usage("ag1", 10.0) == True
+        mock_doc.to_dict.return_value = {"used": 45.0, "limit": 50.0}
+        assert adapter.increment_quota_usage("ag1", 10.0) == False
         
         mock_doc.exists = False
-        assert adapter.increment_quota_usage("ag1", 10) == True
-        assert adapter.increment_quota_usage("ag1", 4000) == False
+        assert adapter.increment_quota_usage("ag1", 10.0) == True
+        assert adapter.increment_quota_usage("ag1", 100.0) == False
 
 def test_firestore_adapter_styles_training():
     with patch("google.cloud.firestore.Client") as mock_client:

@@ -80,8 +80,11 @@ class FinalizeJobUseCase:
                 new_jobs.append((group_job_id, group_idemp_key, room_name, filenames))
                 
         if new_jobs:
-            if not self.db.increment_quota_usage(agency_id, len(new_jobs)):
-                return {"status": "quota_exceeded", "message": "Monthly quota limit of 3000 HDR generations reached."}
+            # We estimate cost per job/room to be ~ $0.135
+            # We calculate total cost based on the number of groups
+            total_cost = len(new_jobs) * 0.135
+            if not self.db.increment_quota_usage(agency_id, total_cost):
+                return {"status": "quota_exceeded", "message": "Monthly budget limit of $50 reached."}
 
             for group_job_id, group_idemp_key, room_name, filenames in new_jobs:
                 self.db.save_job(group_job_id, session_id, "PENDING", group_idemp_key)
@@ -156,11 +159,15 @@ class ProcessHdrGroupUseCase:
             # Free intermediate arrays
             del aligned_images
             del res_16bit
-            gc.collect()
-            try:
-                ctypes.CDLL('libc.so.6').malloc_trim(0)
-            except Exception:
-                pass
+            
+            def run_gc():
+                gc.collect()
+                try:
+                    import ctypes
+                    ctypes.CDLL('libc.so.6').malloc_trim(0)
+                except Exception:
+                    pass
+            await asyncio.to_thread(run_gc)
             
             # Encode final fused base image to bytes
             _, encoded_base = cv2.imencode('.jpg', final_bgr_8bit, [cv2.IMWRITE_JPEG_QUALITY, 90])
@@ -180,15 +187,15 @@ class ProcessHdrGroupUseCase:
             _, encoded_orig = cv2.imencode('.jpg', brightness_sorted[mid_idx], [cv2.IMWRITE_JPEG_QUALITY, 90])
             original_bytes = encoded_orig.tobytes()
             
-            # Encode all brackets to bytes for Gemini
-            bracket_bytes_list = []
-            for d_img in downsampled_images:
-                _, enc = cv2.imencode('.jpg', d_img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-                bracket_bytes_list.append(enc.tobytes())
+            # Encode only the darkest bracket to bytes for Gemini (Bracket Pruning)
+            # This drastically reduces context size and prevents the VLM from being confused by overexposed brackets
+            darkest_img = min(downsampled_images, key=lambda x: x.mean())
+            _, enc_dark = cv2.imencode('.jpg', darkest_img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            bracket_bytes_list = [enc_dark.tobytes()]
                 
             # Free bracket arrays
             del downsampled_images
-            gc.collect()
+            await asyncio.to_thread(gc.collect)
 
             # GenAI + Structural QA Loop
             from backend.core.generation_loop import generate_hybrid_hdr, compute_structural_diff
@@ -224,54 +231,94 @@ class ProcessHdrGroupUseCase:
                     style_paths = self.db.get_style_images(agency_id, limit=2)
                     style_urls = [self.storage.generate_signed_url(p) for p in style_paths]
                 
-                max_retries = 3
-                for attempt in range(max_retries + 1):
+                # Hoist file uploads outside of retry loop
+                def upload(b, name):
+                    import tempfile
+                    tmp_path = None
                     try:
-                        gen_img_bytes, gen_info = await generate_hybrid_hdr(
-                            client, fused_base_bytes, bracket_bytes_list, retry_count=attempt, style_urls=style_urls, training_pairs=training_pairs
-                        )
-                        
-                        # Structural QA
-                        from backend.core.image_decoding import decode_image
-                        gen_cv_img = decode_image(gen_img_bytes)
-                        base_cv_img = decode_image(fused_base_bytes)
-                        
-                        is_valid, inlier_ratio, void_ratio = compute_structural_diff(base_cv_img, gen_cv_img)
-                        telemetry.append({
-                            "attempt": attempt,
-                            "is_valid": is_valid,
-                            "inlier_ratio": inlier_ratio,
-                            "void_ratio": void_ratio
-                        })
-                        
-                        del base_cv_img
-                        gc.collect()
-                        
-                        if is_valid:
-                            final_image_bytes = gen_img_bytes
-                            # We got a good generated image
-                            break
-                        else:
-                            del gen_cv_img
-                            gc.collect()
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                            tmp.write(b)
+                            tmp_path = tmp.name
+                        try:
+                            f = client.files.upload(file=tmp_path, config={"display_name": name})
+                        except Exception:
+                            f = client.files.upload(file=tmp_path)
+                        return f
+                    finally:
+                        if tmp_path and os.path.exists(tmp_path):
+                            try:
+                                os.remove(tmp_path)
+                            except Exception:
+                                pass
+
+                uploaded_files = []
+                try:
+                    fused_file = await asyncio.to_thread(upload, fused_base_bytes, "fused_base.jpg")
+                    uploaded_files.append(fused_file)
+                    
+                    bracket_files = []
+                    for i, bb in enumerate(bracket_bytes_list):
+                        bf = await asyncio.to_thread(upload, bb, f"bracket_{i}.jpg")
+                        uploaded_files.append(bf)
+                        bracket_files.append(bf)
+
+                    max_retries = 3
+                    for attempt in range(max_retries + 1):
+                        try:
+                            gen_img_bytes, gen_info = await generate_hybrid_hdr(
+                                client, fused_file, bracket_files, retry_count=attempt, style_urls=style_urls, training_pairs=training_pairs
+                            )
+                            
+                            # Structural QA
+                            from backend.core.image_decoding import decode_image
+                            gen_cv_img = decode_image(gen_img_bytes)
+                            base_cv_img = decode_image(fused_base_bytes)
+                            
+                            is_valid, inlier_ratio, void_ratio = compute_structural_diff(base_cv_img, gen_cv_img)
+                            telemetry.append({
+                                "attempt": attempt,
+                                "is_valid": is_valid,
+                                "inlier_ratio": inlier_ratio,
+                                "void_ratio": void_ratio
+                            })
+                            
+                            del base_cv_img
+                            await asyncio.to_thread(gc.collect)
+                            
+                            if is_valid:
+                                final_image_bytes = gen_img_bytes
+                                # We got a good generated image
+                                break
+                            else:
+                                del gen_cv_img
+                                await asyncio.to_thread(gc.collect)
+                                if attempt == max_retries:
+                                    # Fallback to OpenCV base
+                                    final_image_bytes = fused_base_bytes
+                                    is_flagged = True
+                                    report_data = {"reason": "Structural QA failed 3 times. Falling back to OpenCV base."}
+                                    import logging
+                                    logger = logging.getLogger(__name__)
+                                    logger.warning(f"Room {room} structural QA failed 3x. Fallback used.")
+                                    
+                        except Exception as e:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.error(f"Generation error on attempt {attempt}: {e}")
+                            telemetry.append({"attempt": attempt, "error": str(e)})
                             if attempt == max_retries:
-                                # Fallback to OpenCV base
                                 final_image_bytes = fused_base_bytes
                                 is_flagged = True
-                                report_data = {"reason": "Structural QA failed 3 times. Falling back to OpenCV base."}
-                                import logging
-                                logger = logging.getLogger(__name__)
-                                logger.warning(f"Room {room} structural QA failed 3x. Fallback used.")
-                                
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.error(f"Generation error on attempt {attempt}: {e}")
-                        telemetry.append({"attempt": attempt, "error": str(e)})
-                        if attempt == max_retries:
-                            final_image_bytes = fused_base_bytes
-                            is_flagged = True
-                            report_data = {"reason": f"API Errors exhausted retries. Fallback used: {e}"}
+                                report_data = {"reason": f"API Errors exhausted retries. Fallback used: {e}"}
+                finally:
+                    # Cleanup Gemini uploaded files
+                    for f in uploaded_files:
+                        try:
+                            await asyncio.to_thread(client.files.delete, name=f.name)
+                        except Exception as e:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.warning(f"Failed to delete Gemini file {f.name}: {e}")
             else:
                 # Mock path for testing
                 telemetry.append({"mock": "used dummy-key"})
@@ -289,7 +336,7 @@ class ProcessHdrGroupUseCase:
             
             del final_bgr_8bit
             del thumb_img
-            gc.collect()
+            await asyncio.to_thread(gc.collect)
             
             # 2. Upload the finished assets
             final_filename = f"hdr_{room.replace(' ', '_')}_{uuid.uuid4().hex[:8]}.jpg"

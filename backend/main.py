@@ -112,10 +112,10 @@ from backend.session_words import STYLES, RESIDENCES
 def generate_random_code(fallback=False):
     style = random.choice(STYLES)
     residence = random.choice(RESIDENCES)
-    word = f"{style}{residence}"
+    word = f"{style}-{residence}"
     if fallback:
         num = random.randint(10, 999)
-        return f"{word}{num}"
+        return f"{word}-{num}"
     return word
 
 @app.get("/api/v1/sessions/generate")

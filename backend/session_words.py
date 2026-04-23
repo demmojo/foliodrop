@@ -11,5 +11,5 @@ RESIDENCES = [
     "chalet", "manor", "villa", "castle", "estate", "mansion", "chateau", 
     "penthouse", "retreat", "sanctuary", "haven", "residence", "lodge", 
     "townhouse", "terrace", "loft", "domain", "palace", "bungalow", "cottage",
-    "cabin", "homestead", "ranch", "compound", "oasis", "hideaway", "pavilion"
+    "cabin", "homestead", "ranch", "compound", "oasis", "hideaway", "pavilion", "flat"
 ]

@@ -129,24 +129,30 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
       {/* Slider Handle */}
       <div 
         className={clsx(
-          "absolute top-0 bottom-0 w-1 bg-surface cursor-ew-resize hover:bg-accent transition-all duration-300 z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)] flex items-center justify-center -ml-0.5",
+          "absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize hover:bg-accent transition-all duration-300 z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)] flex items-center justify-center -ml-0.5",
           imagesLoaded ? 'opacity-100' : 'opacity-0'
         )}
         style={{ left: `${sliderPosition}%` }}
       >
-        <div className="w-8 h-8 rounded-full bg-surface shadow-md border border-border flex items-center justify-center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground">
-            <polyline points="9 18 15 12 9 6"></polyline>
+        <div className="w-10 h-10 rounded-full bg-white shadow-lg border border-border flex items-center justify-center -ml-0.5 hover:scale-110 transition-transform">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-black w-5 h-5">
+            <path d="m9 18-6-6 6-6"/>
+            <path d="m15 18 6-6-6-6"/>
           </svg>
         </div>
       </div>
       
       {/* Labels */}
-      <div className={clsx("absolute top-4 left-4 z-20 pointer-events-none transition-opacity duration-300", imagesLoaded ? 'opacity-100' : 'opacity-0')}>
-        <span className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 text-[10px] uppercase tracking-widest font-mono rounded-sm">{t('before')}</span>
+      <div className={clsx("absolute bottom-6 left-6 z-20 pointer-events-none transition-opacity duration-300", imagesLoaded && sliderPosition > 20 ? 'opacity-100' : 'opacity-0')}>
+        <span className="bg-black/60 backdrop-blur-md text-white/90 border border-white/20 px-3 py-1.5 text-xs uppercase tracking-[0.2em] font-semibold rounded-md shadow-lg flex items-center gap-2">
+          {t('before')} <span className="text-[10px] text-white/50">(0 EV)</span>
+        </span>
       </div>
-      <div className={clsx("absolute top-4 right-4 z-20 pointer-events-none transition-opacity duration-300", imagesLoaded ? 'opacity-100' : 'opacity-0')}>
-        <span className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 text-[10px] uppercase tracking-widest font-mono rounded-sm">{t('after')}</span>
+      <div className={clsx("absolute bottom-6 right-6 z-20 pointer-events-none transition-opacity duration-300", imagesLoaded && sliderPosition < 80 ? 'opacity-100' : 'opacity-0')}>
+        <span className="bg-black/60 backdrop-blur-md text-white/90 border border-white/20 px-3 py-1.5 text-xs uppercase tracking-[0.2em] font-semibold rounded-md shadow-lg flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          {t('after')}
+        </span>
       </div>
     </div>
   );

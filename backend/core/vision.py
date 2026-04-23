@@ -42,7 +42,8 @@ def apply_real_estate_heuristics(image_float: np.ndarray) -> np.ndarray:
     
     # Apply CLAHE
     # For a 2K image, 8x8 gives massive 256px tiles leading to halo sweeps. Use 16x16.
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
+    # Lower clipLimit from 2.0 to 1.2 to reduce "stark/aggressive" HDR contrast
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(16, 16))
     l_clahe = clahe.apply(l_16)
     
     # Scale back to float32 L channel [0.0, 100.0]
@@ -52,7 +53,8 @@ def apply_real_estate_heuristics(image_float: np.ndarray) -> np.ndarray:
     # Blur the L channel
     gaussian_blur = cv2.GaussianBlur(l_out_float, (0, 0), 1.5)
     # unsharp_mask = original + (original - blur) * amount
-    l_unsharp = l_out_float + (l_out_float - gaussian_blur) * 0.5
+    # Lower amount from 0.5 to 0.25 to prevent fine details from becoming overly crunchy
+    l_unsharp = l_out_float + (l_out_float - gaussian_blur) * 0.25
     # Clip to valid L range
     l_unsharp = np.clip(l_unsharp, 0.0, 100.0)
     
@@ -61,8 +63,9 @@ def apply_real_estate_heuristics(image_float: np.ndarray) -> np.ndarray:
     bgr_out_float = cv2.cvtColor(lab_merged, cv2.COLOR_LAB2BGR)
     
     # 1. Edge-Preserving Noise Reduction
-    # Using bilateral filter on float32 image. d=5, sigmaColor=0.1 (scaled), sigmaSpace=5.0
-    polished_float = cv2.bilateralFilter(bgr_out_float, d=5, sigmaColor=0.1, sigmaSpace=5.0)
+    # Increase bilateral filter strength to smooth flat shadows and textures on walls
+    # d=7 (was 5), sigmaColor=0.15 (was 0.1), sigmaSpace=10.0 (was 5.0)
+    polished_float = cv2.bilateralFilter(bgr_out_float, d=7, sigmaColor=0.15, sigmaSpace=10.0)
     
     # Slight gamma correction to lift midtones/shadows before sending to GenAI
     gamma = 1.2

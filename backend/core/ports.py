@@ -14,7 +14,7 @@ class IDatabase(Protocol):
     def get_jobs(self, job_ids: List[str]) -> List[dict]: ... # pragma: no cover
 
     def get_agency_quota(self, agency_id: str) -> dict: ... # pragma: no cover
-    def increment_quota_usage(self, agency_id: str, amount: int) -> bool: ... # pragma: no cover
+    def increment_quota_usage(self, agency_id: str, amount: float) -> bool: ... # pragma: no cover
     def save_style_image(self, agency_id: str, blob_path: str) -> List[str]: ... # pragma: no cover
     def get_style_images(self, agency_id: str, limit: int = 2) -> List[str]: ... # pragma: no cover
     def get_style_profiles(self, agency_id: str) -> List[dict]: ... # pragma: no cover

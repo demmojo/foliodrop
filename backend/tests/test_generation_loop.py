@@ -181,10 +181,8 @@ def test_compute_structural_diff_void_ratio():
 @pytest.mark.asyncio
 async def test_generate_hybrid_hdr_success():
     client = MagicMock()
-    # Mock files.upload
     mock_file = MagicMock()
     mock_file.name = "test_file_name"
-    client.files.upload.return_value = mock_file
     
     # Mock generate_content
     mock_response = MagicMock()
@@ -193,81 +191,37 @@ async def test_generate_hybrid_hdr_success():
     mock_response.parts = [mock_part]
     client.aio.models.generate_content = __import__("unittest.mock").mock.AsyncMock(return_value=mock_response)
     
-    fused_bytes = b"fused"
-    bracket_bytes = [b"b1", b"b2"]
     style_urls = ["http://style1.jpg"]
-    
+
     with patch("google.genai.types.Part.from_uri") as mock_from_uri:
         mock_from_uri.return_value = "mocked_part"
-        result, status = await generate_hybrid_hdr(client, fused_bytes, bracket_bytes, retry_count=1, style_urls=style_urls)
+        result, status = await generate_hybrid_hdr(client, mock_file, [mock_file, mock_file], retry_count=1, style_urls=style_urls)
     assert result == b"generated_image_bytes"
     assert status == {"status": "success"}
-    
-    # Verify file deletion
-    assert client.files.delete.call_count == 3  # 1 fused + 2 brackets
 
-@pytest.mark.asyncio
-async def test_generate_hybrid_hdr_upload_exception():
-    client = MagicMock()
-    # Mock files.upload to throw on first config argument call then succeed
-    def upload_side_effect(*args, **kwargs):
-        if "config" in kwargs:
-            raise Exception("Upload with config failed")
-        mock_file = MagicMock()
-        mock_file.name = "test_file_name"
-        return mock_file
-    client.files.upload.side_effect = upload_side_effect
-    
-    mock_response = MagicMock()
-    mock_part = MagicMock()
-    mock_part.inline_data.data = b"generated_image_bytes"
-    mock_response.parts = [mock_part]
-    client.aio.models.generate_content = __import__("unittest.mock").mock.AsyncMock(return_value=mock_response)
-    
-    fused_bytes = b"fused"
-    
-    result, status = await generate_hybrid_hdr(client, fused_bytes, [])
-    assert result == b"generated_image_bytes"
+    # We hoisted file deletion, so it is 0
+    assert client.files.delete.call_count == 0
 
 @pytest.mark.asyncio
 async def test_generate_hybrid_hdr_no_parts():
     client = MagicMock()
-    client.files.upload.return_value = MagicMock()
     mock_response = MagicMock()
     mock_response.parts = []
     client.aio.models.generate_content = __import__("unittest.mock").mock.AsyncMock(return_value=mock_response)
     
+    mock_file = MagicMock()
     with pytest.raises(GenerationError, match="No parts in response"):
-        await generate_hybrid_hdr(client, b"fused", [])
+        await generate_hybrid_hdr(client, mock_file, [])
 
 @pytest.mark.asyncio
 async def test_generate_hybrid_hdr_no_inline_data():
     client = MagicMock()
-    client.files.upload.return_value = MagicMock()
     mock_response = MagicMock()
     mock_part = MagicMock()
     mock_part.inline_data = None
     mock_response.parts = [mock_part]
     client.aio.models.generate_content = __import__("unittest.mock").mock.AsyncMock(return_value=mock_response)
     
-    with pytest.raises(GenerationError, match="No image returned by model"):
-        await generate_hybrid_hdr(client, b"fused", [])
-
-@pytest.mark.asyncio
-async def test_generate_hybrid_hdr_delete_exception():
-    client = MagicMock()
     mock_file = MagicMock()
-    client.files.upload.return_value = mock_file
-    
-    mock_response = MagicMock()
-    mock_part = MagicMock()
-    mock_part.inline_data.data = b"generated_image_bytes"
-    mock_response.parts = [mock_part]
-    client.aio.models.generate_content = __import__("unittest.mock").mock.AsyncMock(return_value=mock_response)
-    
-    # Simulate delete exception
-    client.files.delete.side_effect = Exception("Delete failed")
-    
-    # Should not raise
-    result, status = await generate_hybrid_hdr(client, b"fused", [])
-    assert result == b"generated_image_bytes"
+    with pytest.raises(GenerationError, match="No image returned by model"):
+        await generate_hybrid_hdr(client, mock_file, [])
