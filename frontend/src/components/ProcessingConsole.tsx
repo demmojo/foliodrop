@@ -84,40 +84,70 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
                 <div key={job.id} className="relative aspect-[3/2] rounded-xl overflow-hidden bg-[#0D0D0C] border border-[#2A2A2A] shadow-sm flex items-center justify-center group">
                    {isDone && job.result?.thumbUrl ? (
                       <>
+                        {/* Keep the blurred image behind as the crossfade base */}
+                        {job.initialThumbUrl && (
+                             <div className="absolute inset-0 z-0 overflow-hidden bg-black pointer-events-none">
+                                 <img 
+                                     src={job.initialThumbUrl} 
+                                     alt="Base"
+                                     className="w-full h-full object-cover scale-110 opacity-70"
+                                     style={{ 
+                                         filter: `blur(8px) grayscale(0%)`
+                                     }}
+                                 />
+                             </div>
+                        )}
                         <img 
                           src={job.result.thumbUrl} 
                           alt={`Scene ${i+1}`} 
-                          className="w-full h-full object-cover animate-in fade-in zoom-in-95 duration-500"
+                          className="relative z-10 w-full h-full object-cover animate-in fade-in zoom-in-95 duration-700"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        <div className="absolute bottom-2 left-2 right-2 text-left opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <div className="absolute z-20 inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute z-20 bottom-2 left-2 right-2 text-left opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                            <span className="text-[10px] font-medium text-white truncate block drop-shadow-md">
                              {job.result.sceneName || `Scene ${i+1}`}
                            </span>
                         </div>
                       </>
                    ) : isFailed ? (
-                      <div className="flex flex-col items-center gap-2 text-warning/80">
+                      <div className="flex flex-col items-center gap-2 text-warning/80 relative z-10">
                          <AlertTriangle className="w-5 h-5" />
                          <span className="text-[10px] font-medium uppercase tracking-wider">Failed</span>
                       </div>
                    ) : (
-                      <div className="flex flex-col items-center gap-3 w-full h-full justify-center">
-                         <div className="relative">
-                            <ImageIcon className="w-6 h-6 text-[#8A8A8A] opacity-20" />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                               <div className="w-8 h-8 border-2 border-foreground/10 border-t-foreground/40 rounded-full animate-spin" />
+                      <>
+                         {job.initialThumbUrl && (
+                             <div className="absolute inset-0 z-0 overflow-hidden bg-black">
+                                 <img 
+                                     src={job.initialThumbUrl} 
+                                     alt="Processing..."
+                                     className="w-full h-full object-cover scale-110 opacity-70"
+                                     style={{ 
+                                         filter: `blur(${Math.max(8, 30 - (displayProgress * 0.25))}px) grayscale(${Math.max(0, 80 - displayProgress)}%)`,
+                                         transition: 'filter 1s linear'
+                                     }}
+                                 />
+                                 {/* Heavy dark gradient to protect text legibility */}
+                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
+                             </div>
+                         )}
+                         <div className="relative z-10 flex flex-col items-center gap-3 w-full h-full justify-center">
+                            <div className="relative flex items-center justify-center w-8 h-8">
+                               {!job.initialThumbUrl && <ImageIcon className="w-6 h-6 text-[#8A8A8A] opacity-20 absolute" />}
+                               <div className="absolute inset-0 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
                             </div>
+                            <span className="text-[10px] uppercase font-bold tracking-widest text-white/90 shadow-black drop-shadow-md">
+                               {job.status === 'PENDING' ? 'Queued' : 'Processing'}
+                            </span>
                          </div>
-                         <span className="text-[10px] uppercase font-bold tracking-widest text-[#8A8A8A]">Processing</span>
-                      </div>
+                      </>
                    )}
                    
                    {/* Overlay Status Badge */}
                    <div className="absolute top-2 right-2 z-10">
                       {isDone ? (
-                         <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center backdrop-blur-md border border-emerald-500/30">
-                            <Check className="w-3 h-3 text-emerald-500" />
+                         <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shadow-md border border-white/20">
+                            <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
                          </div>
                       ) : isFailed ? null : (
                          <div className="w-2 h-2 rounded-full bg-[#B0A084] animate-pulse shadow-[0_0_8px_rgba(176,160,132,0.5)]" />

@@ -197,8 +197,8 @@ class ProcessHdrGroupUseCase:
             del downsampled_images
             await asyncio.to_thread(gc.collect)
 
-            # GenAI + Structural QA Loop
-            from backend.core.generation_loop import generate_hybrid_hdr, compute_structural_diff
+            # GenAI Loop
+            from backend.core.generation_loop import generate_hybrid_hdr
             from google import genai
             import os
             
@@ -269,37 +269,9 @@ class ProcessHdrGroupUseCase:
                                 client, fused_file, bracket_files, retry_count=attempt, style_urls=style_urls, training_pairs=training_pairs
                             )
                             
-                            # Structural QA
-                            from backend.core.image_decoding import decode_image
-                            gen_cv_img = decode_image(gen_img_bytes)
-                            base_cv_img = decode_image(fused_base_bytes)
-                            
-                            is_valid, inlier_ratio, void_ratio = compute_structural_diff(base_cv_img, gen_cv_img)
-                            telemetry.append({
-                                "attempt": attempt,
-                                "is_valid": is_valid,
-                                "inlier_ratio": inlier_ratio,
-                                "void_ratio": void_ratio
-                            })
-                            
-                            del base_cv_img
-                            await asyncio.to_thread(gc.collect)
-                            
-                            if is_valid:
-                                final_image_bytes = gen_img_bytes
-                                # We got a good generated image
-                                break
-                            else:
-                                del gen_cv_img
-                                await asyncio.to_thread(gc.collect)
-                                if attempt == max_retries:
-                                    # Fallback to OpenCV base
-                                    final_image_bytes = fused_base_bytes
-                                    is_flagged = True
-                                    report_data = {"reason": "Structural QA failed 3 times. Falling back to OpenCV base."}
-                                    import logging
-                                    logger = logging.getLogger(__name__)
-                                    logger.warning(f"Room {room} structural QA failed 3x. Fallback used.")
+                            final_image_bytes = gen_img_bytes
+                            # We got a good generated image
+                            break
                                     
                         except Exception as e:
                             import logging

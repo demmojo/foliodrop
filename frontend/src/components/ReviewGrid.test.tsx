@@ -222,11 +222,7 @@ describe('ReviewGrid Component', () => {
     expect(onConfirmMock).toHaveBeenCalled();
   });
 
-  it('renders VLM report details when available', () => {
-    render(<ReviewGrid photos={mockPhotos} onConfirm={vi.fn()} />);
-    expect(screen.getByText(/Too bright/)).toBeInTheDocument();
-    expect(screen.getByText(/⚠️ QA Note/)).toBeInTheDocument();
-  });
+    // Mock test removed since VLM report was removed
 
   it('displays empty states when applicable', () => {
     render(<ReviewGrid photos={[]} onConfirm={vi.fn()} />);

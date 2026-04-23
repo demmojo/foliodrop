@@ -373,7 +373,15 @@ export default function UploadFlow() {
       
       const finalizeData = await finalizeRes.json();
       if (finalizeData.job_ids) {
-          addJobs(finalizeData.job_ids, sid);
+          // Find the middle bracket's previewUrl for each group
+          const initialThumbUrls = photoGroups.map(group => {
+              const photos = group.photos;
+              if (!photos || photos.length === 0) return undefined;
+              const middleIndex = Math.floor(photos.length / 2);
+              return photos[middleIndex]?.previewUrl;
+          });
+          
+          addJobs(finalizeData.job_ids, sid, initialThumbUrls as string[]);
       } else if (finalizeData.error) {
           throw new Error(finalizeData.error);
       }

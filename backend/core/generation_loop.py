@@ -175,7 +175,7 @@ async def generate_hybrid_hdr(
         # Prompt construction
         prompt = """Professional interior architectural photography.
 Create a highly polished, stunning real estate listing photo. 
-Ensure the lighting is bright, airy, and balanced. Lift the shadows to reveal details in darker areas, and avoid excessive contrast or crushed blacks. Make wood textures look luxurious without making them too dark.
+Ensure the lighting is soft, natural, and balanced. Keep edges and details fine, but ensure that walls, ceilings, and flat surfaces remain pristine and smooth without harsh, over-structured lighting, weird shadows, or blotchy textures. Avoid over-sharpening or creating HDR halos. Lift the shadows gently to reveal details in darker areas, and avoid excessive contrast or crushed blacks. Make wood textures look luxurious without making them too dark.
 
 CRITICAL WINDOW VIEW REQUIREMENT:
 - You MUST preserve the clear, vibrant view through the windows.

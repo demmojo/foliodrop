@@ -119,18 +119,6 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                     </div>
                 </div>
                 
-                {photo.vlmReport && (
-                    <details className="mt-1">
-                        <summary className="text-xs text-muted cursor-pointer hover:text-foreground outline-none list-none">
-                            <span className="flex items-center gap-1">
-                                <span className="text-warning/80">⚠️ QA Note</span> (Score: {photo.vlmReport.window_score || 'N/A'})
-                            </span>
-                        </summary>
-                        <p className="text-[10px] text-muted leading-relaxed mt-2 p-2 bg-foreground/5 rounded border-l-2 border-warning/30">
-                            {photo.vlmReport.reason || photo.vlmReport.window_reasoning || JSON.stringify(photo.vlmReport)}
-                        </p>
-                    </details>
-                )}
               </div>
             ))}
           </div>

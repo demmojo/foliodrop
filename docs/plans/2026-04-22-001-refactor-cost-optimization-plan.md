@@ -21,6 +21,7 @@ When a user uploads a bracketed room scene, the system fuses the images using Op
 - R2. Maintain or improve the quality of the generated HDR images (structural integrity + window view preservation).
 - R3. Eliminate server freezing (ASGI event loop blocking) during heavy load.
 - R4. Prevent disk space exhaustion from leaked temporary files.
+- R5. Prevent redundant processing of previously processed bracket groups via caching.
 
 ## Scope Boundaries
 
@@ -33,6 +34,7 @@ When a user uploads a bracketed room scene, the system fuses the images using Op
 - **Bracket Pruning**: Send only 2 images to Gemini (the `fused_base` and the single darkest bracket) instead of 6. The `fused_base` handles the interior, while the darkest bracket provides the window recovery data.
 - **Hoisting Uploads**: Gemini file uploads will occur *once* before the generation retry loop, ensuring Context Caching activates.
 - **Deterministic Prompting**: Setting `temperature=0.0` to force structural adherence, combined with a slightly relaxed SIFT threshold (`8.0`), to drastically reduce false-positive QA rejections.
+- **Bracket Caching**: Implement a hashing mechanism on the input files to detect identical photos. If the hash exists in the cache, the system skips the OpenCV and Gemini processing entirely and returns the cached result.
 
 ## Implementation Units
 
@@ -69,10 +71,20 @@ In `ProcessHdrGroupUseCase`, identify the darkest bracket (lowest mean brightnes
 **Approach:**
 Change the `temperature` in `types.GenerateContentConfig` to `0.0`. In `compute_structural_diff`, increase the `cv2.USAC_MAGSAC` threshold from `5.0` to `8.0` to accommodate minor generative smoothing while still catching major hallucinations.
 
+- [ ] **Unit 5: Bracket Caching Mechanism**
+**Goal:** Hash input brackets to detect identical uploads and return cached results.
+**Requirements:** R1, R5
+**Files:**
+- Modify: `backend/core/use_cases.py`
+- Modify: `backend/infrastructure/adapters.py` (if caching adapter is needed)
+**Approach:**
+Generate a robust hash (e.g., SHA-256) of the input brackets (by hashing the file bytes or an aggregate of them) at the start of `ProcessHdrGroupUseCase`. Check this hash against a cache (in-memory, Redis, or simple disk-based KV). If a cache hit occurs, short-circuit processing and immediately return the cached HDR image path/URL. If a cache miss occurs, proceed with the pipeline and cache the final result before returning.
+
 ## System-Wide Impact
 
 - **Interaction graph:** Gemini API usage will shift from multiple redundant file uploads per job to a single optimized payload upload.
 - **State lifecycle risks:** Files will correctly clear from `/tmp` even on 5xx API errors.
+- **Caching limits:** Identical bracket sets will be served instantly from cache, saving both compute time and API costs, but requires managing cache storage.
 
 ## Risks & Dependencies
 
@@ -80,3 +92,4 @@ Change the `temperature` in `types.GenerateContentConfig` to `0.0`. In `compute_
 |------|------------|
 | Pruning brackets loses lighting context | The OpenCV `fused_base` already contains perfectly merged exposure data. The darkest bracket is sufficient for the VLM to recover window blowouts. |
 | Relaxed SIFT allows hallucinations | 8.0 is still a tight threshold for 1024px images. It will catch major structural changes but allow generative sub-pixel noise. |
+| Cache collisions or unbounded growth | Use a strong cryptographic hash (e.g., SHA-256) over file bytes. Implement a basic TTL or LRU eviction policy if storing large volumes of images locally. |

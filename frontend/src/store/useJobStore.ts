@@ -17,6 +17,7 @@ interface Job {
   nextPollAt: number; // Unix timestamp
   result?: ProcessedHDR;
   error?: string;
+  initialThumbUrl?: string;
 }
 
 interface Quota {
@@ -36,7 +37,7 @@ interface JobStore {
   activeSessionId: string | null;
   quota: Quota | null;
   styleProfiles: StyleProfile[];
-  addJobs: (ids: string[], sessionId: string) => void;
+  addJobs: (ids: string[], sessionId: string, initialThumbUrls?: string[]) => void;
   rehydrateSession: (sessionId: string) => Promise<void>;
   pollDueJobs: () => Promise<void>;
   fetchQuota: () => Promise<void>;
@@ -218,12 +219,17 @@ export const useJobStore = create<JobStore>((set, get) => ({
     }
   },
 
-  addJobs: (ids, sessionId) => {
+  addJobs: (ids, sessionId, initialThumbUrls) => {
     const now = Date.now();
     set((state) => {
       const newJobs = { ...state.jobs };
-      ids.forEach(id => {
-        newJobs[id] = { id, status: 'PENDING', nextPollAt: now };
+      ids.forEach((id, idx) => {
+        newJobs[id] = { 
+          id, 
+          status: 'PENDING', 
+          nextPollAt: now,
+          initialThumbUrl: initialThumbUrls?.[idx]
+        };
       });
       return { jobs: newJobs, activeSessionId: sessionId };
     });
