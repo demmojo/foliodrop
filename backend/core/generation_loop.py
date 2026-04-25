@@ -33,6 +33,17 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
+# Hard structural rules as system instruction (Leeropedia: system constraints beat conflicting user text;
+# avoid prompts that require "window views" when the scene may have no windows).
+_STRUCTURAL_SYSTEM_INSTRUCTION = """You are a real-estate photo refinement model.
+
+Non-negotiable:
+- The first image in the user message is geometric ground truth. Match wall lines, corners, ceiling, and any existing window or door OPENINGS exactly.
+- Do NOT add, remove, move, or resize windows, doors, or other architectural openings. Do NOT paint glass, frames, mullions, or exterior views onto solid walls.
+- If the reference shows a window opening, you may use darker exposure inputs only to improve exposure and exterior detail *within that same opening*—without changing its shape or position.
+- If the reference shows a solid wall with no opening, keep it solid. Never invent a window or outdoor view to satisfy a "view" or HDR aesthetic.
+- You may adjust tone, contrast, shadows, and color for a polished listing look, without altering layout or structure."""
+
 class GenerationError(Exception):
     pass
 
@@ -166,7 +177,7 @@ async def generate_hybrid_hdr(
         # Based on Leeroopedia best practices for structural conditioning:
         # Reference first, brackets middle, strict constraints last.
         contents = [
-            "Reference geometry: Preserve exact wall positions, window openings, and room proportions shown here. This is ground truth.",
+            "User task: The next image is the fused base (geometric and compositional ground truth for this room).",
             fused_file,
         ]
         
@@ -189,32 +200,29 @@ async def generate_hybrid_hdr(
             for url in style_urls:
                 contents.append(types.Part.from_uri(file_uri=url, mime_type="image/jpeg"))
 
-        # Prompt construction
-        prompt = """Professional interior architectural photography.
-Create a highly polished, stunning real estate listing photo. 
-Ensure the lighting is soft, natural, and balanced. Keep edges and details fine, but ensure that walls, ceilings, and flat surfaces remain pristine and smooth without harsh, over-structured lighting, weird shadows, or blotchy textures. Avoid over-sharpening or creating HDR halos. Lift the shadows gently to reveal details in darker areas, and avoid excessive contrast or crushed blacks. Make wood textures look luxurious without making them too dark.
+        # Prompt: polish and exposure only; structural rules live in system_instruction to avoid
+        # conflicting "must show window view" vs "never invent windows" (hallucination driver).
+        prompt = """Polish this interior for a high-end real estate listing.
 
-CRITICAL WINDOW VIEW REQUIREMENT:
-- You MUST preserve the clear, vibrant view through the windows.
-- Draw upon the darker exposure brackets to perfectly expose any exterior scenery (trees, sky, landscape).
-- Do NOT wash out or blow out the windows. Maintain crisp, green foliage and clear exterior details.
+Aesthetic: soft natural light, smooth walls and ceilings, fine edge detail without crunchy sharpening. No HDR halos, harsh local contrast, or blotchy texture. Gently lift shadows; avoid crushed blacks. Wood should look rich, not murky. Overall balanced, magazine-quality, MLS-ready.
 
-CRITICAL CONSTRAINT: Generate HDR image using ONLY:
-- Walls and structural elements from reference
-- Window openings and positions from reference
-- Furniture and decorations visible in all brackets
-DO NOT add, remove, or modify any room structure not present in inputs.
-NEVER invent new windows, doors, or exterior openings."""
+Where the ground-truth image already has a window: use the darker exposure references to recover sky, foliage, or scene detail without blowing out highlights. Do not change the window's position, count, or shape.
+
+Where the ground truth has no window on a wall: keep that wall solid. Do not add a window, glass, or fake exterior view for drama."""
 
         if retry_count > 0:
-            prompt += "\n\nCRITICAL PENALTY WARNING: Your previous attempt severely altered the geometry or hallucinated objects. You MUST strictly adhere to the structural lines of the base image. Do NOT invent new objects."
+            prompt += "\n\nRetry: The previous output failed structural validation. Match the first (fused) image's architecture exactly. Do not invent or move openings."
             
         contents.append(prompt)
         
-        # Safety configuration based on Leeroopedia ML best practices
+        # Leeropedia: low temperature + moderate top_p + system_instruction as hard constraint; high media
+        # resolution for finer conditioning on reference pixels.
         config = types.GenerateContentConfig(
+            system_instruction=_STRUCTURAL_SYSTEM_INSTRUCTION,
             response_modalities=["IMAGE"],
-            temperature=0.0, # Lower temperature for structural fidelity
+            temperature=0.0,
+            top_p=0.9,
+            media_resolution=types.MediaResolution.MEDIA_RESOLUTION_HIGH,
             safety_settings=[
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
