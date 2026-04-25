@@ -119,15 +119,6 @@ export const useJobStore = create<JobStore>((set, get) => ({
         body: formData,
       });
       if (res.ok) {
-      // #region agent log
-      try {
-        const clonedRes = res.clone();
-        clonedRes.json().then(data => {
-          fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'daa93d'},body:JSON.stringify({sessionId:'daa93d',hypothesisId:'H4',location:'frontend/useJobStore.ts:pollDueJobs',message:'batch-status response',data:{jobsCount: data.jobs?.length},timestamp:Date.now()})}).catch(()=>{});
-        }).catch(()=>{});
-      } catch(e) {}
-      // #endregion
-        // Refetch to get the actual ID and URL from the backend
         await get().fetchStyleProfiles();
       }
     } catch (e) {
@@ -203,14 +194,6 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
       const res = await fetch(`${API_URL}/api/v1/quota`, { headers });
       if (res.ok) {
-      // #region agent log
-      try {
-        const clonedRes = res.clone();
-        clonedRes.json().then(data => {
-          fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'daa93d'},body:JSON.stringify({sessionId:'daa93d',hypothesisId:'H4',location:'frontend/useJobStore.ts:pollDueJobs',message:'batch-status response',data:{jobsCount: data.jobs?.length},timestamp:Date.now()})}).catch(()=>{});
-        }).catch(()=>{});
-      } catch(e) {}
-      // #endregion
         const data = await res.json();
         set({ quota: data });
       }
@@ -243,14 +226,6 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
       const res = await fetch(`${API_URL}/api/v1/jobs/active?session_id=${sessionId}`, { headers });
       if (res.ok) {
-      // #region agent log
-      try {
-        const clonedRes = res.clone();
-        clonedRes.json().then(data => {
-          fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'daa93d'},body:JSON.stringify({sessionId:'daa93d',hypothesisId:'H4',location:'frontend/useJobStore.ts:pollDueJobs',message:'batch-status response',data:{jobsCount: data.jobs?.length},timestamp:Date.now()})}).catch(()=>{});
-        }).catch(()=>{});
-      } catch(e) {}
-      // #endregion
         const data = await res.json();
         const now = Date.now();
         set((state) => {
@@ -285,13 +260,6 @@ export const useJobStore = create<JobStore>((set, get) => ({
     const { jobs } = get();
     const now = Date.now();
     
-    // Gather only the IDs that are due for polling
-    // #region agent log
-    try {
-      fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'daa93d'},body:JSON.stringify({sessionId:'daa93d',hypothesisId:'H4',location:'frontend/useJobStore.ts:pollDueJobs',message:'polling due ids',data:{totalJobs: Object.values(jobs).length, activeSessionId: get().activeSessionId},timestamp:Date.now()})}).catch(()=>{});
-    } catch(e) {}
-    // #endregion
-    
     const dueIds = Object.values(jobs)
       .filter(job => ['PENDING', 'PROCESSING'].includes(job.status))
       .filter(job => job.nextPollAt <= now)
@@ -315,14 +283,6 @@ export const useJobStore = create<JobStore>((set, get) => ({
       const globalDelayMs = globalRetryAfter ? parseInt(globalRetryAfter) * 1000 : 0;
 
       if (res.ok) {
-      // #region agent log
-      try {
-        const clonedRes = res.clone();
-        clonedRes.json().then(data => {
-          fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'daa93d'},body:JSON.stringify({sessionId:'daa93d',hypothesisId:'H4',location:'frontend/useJobStore.ts:pollDueJobs',message:'batch-status response',data:{jobsCount: data.jobs?.length},timestamp:Date.now()})}).catch(()=>{});
-        }).catch(()=>{});
-      } catch(e) {}
-      // #endregion
         const data = await res.json();
         
         set((state) => {
@@ -361,11 +321,6 @@ export const useJobStore = create<JobStore>((set, get) => ({
       }
     } catch (error) {
       console.error("Batch polling failed", error);
-      // #region agent log
-      try {
-        fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'daa93d'},body:JSON.stringify({sessionId:'daa93d',hypothesisId:'H4',location:'frontend/useJobStore.ts:pollDueJobs',message:'batch-status error',data:{error: String(error)},timestamp:Date.now()})}).catch(()=>{});
-      } catch(e) {}
-      // #endregion
     }
   }
 }));

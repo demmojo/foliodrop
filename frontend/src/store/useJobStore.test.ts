@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useJobStore } from './useJobStore';
 
-// Smart mock fetch
+// Central fetch mock (API + optional dev ingest URLs)
 const mockFetch = vi.fn().mockImplementation((url) => {
-  if (typeof url === 'string' && url.includes('127.0.0.1:7781/ingest')) {
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-  }
   return Promise.resolve({
     ok: true,
     headers: { get: vi.fn() },
@@ -75,7 +72,6 @@ describe('useJobStore', () => {
 
     it('uploadStyleProfile should succeed', async () => {
       mockFetch.mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
         if (typeof url === 'string' && url.includes('/api/v1/style/profiles')) {
           return Promise.resolve({
             ok: true,
@@ -102,10 +98,7 @@ describe('useJobStore', () => {
     });
 
     it('uploadStyleProfile should handle failure', async () => {
-      mockFetch.mockImplementationOnce((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
-        return Promise.resolve({ ok: false });
-      });
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       await useJobStore.getState().uploadStyleProfile(new File([''], 'test.jpg'));
@@ -116,10 +109,7 @@ describe('useJobStore', () => {
     });
 
     it('uploadTrainingPair should succeed', async () => {
-      mockFetch.mockImplementationOnce((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
-        return Promise.resolve({ ok: true });
-      });
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: true }));
 
       const brackets = [new File([''], 'b1.jpg')];
       const final = new File([''], 'final.jpg');
@@ -127,10 +117,7 @@ describe('useJobStore', () => {
     });
 
     it('uploadTrainingPair should log error on failure', async () => {
-      mockFetch.mockImplementationOnce((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
-        return Promise.resolve({ ok: false });
-      });
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       await useJobStore.getState().uploadTrainingPair([], new File([''], 'final.jpg'));
@@ -140,10 +127,7 @@ describe('useJobStore', () => {
     });
 
     it('overrideWithManualEdit should succeed', async () => {
-      mockFetch.mockImplementationOnce((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
-        return Promise.resolve({ ok: true });
-      });
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: true }));
       
       useJobStore.setState({
         jobs: {
@@ -164,6 +148,24 @@ describe('useJobStore', () => {
       expect(state.jobs['job1'].result?.status).toBe('APPROVED');
     });
 
+    it('overrideWithManualEdit should log if override HTTP returns not ok', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
+      useJobStore.setState({
+        jobs: {
+          'job1': {
+            id: 'job1',
+            status: 'NEEDS_REVIEW',
+            nextPollAt: 0,
+            result: { id: 'job1', url: 'old', sceneName: 'Living', status: 'NEEDS_REVIEW' }
+          }
+        }
+      });
+      await useJobStore.getState().overrideWithManualEdit('job1', new File([''], 'edit.jpg'));
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to override with manual edit');
+      consoleSpy.mockRestore();
+    });
+
     it('overrideWithManualEdit should log error if network fails', async () => {
       mockFetch.mockImplementationOnce((url) => {
         return Promise.reject(new Error("Network Error"));
@@ -177,8 +179,7 @@ describe('useJobStore', () => {
     });
 
     it('fetchQuota should succeed', async () => {
-      mockFetch.mockImplementationOnce((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
+      mockFetch.mockImplementationOnce(() => {
         return Promise.resolve({
           ok: true,
           clone: () => ({ json: () => Promise.resolve({}) }),
@@ -228,8 +229,7 @@ describe('useJobStore', () => {
         }
       });
 
-      mockFetch.mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
+      mockFetch.mockImplementation(() => {
         return Promise.resolve({
           ok: false,
           headers: new Headers(), // return a real Headers object to prevent TypeError
@@ -257,8 +257,7 @@ describe('useJobStore', () => {
       const now = Date.now();
       vi.spyOn(Date, 'now').mockReturnValue(now);
       
-      mockFetch.mockImplementationOnce((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
+      mockFetch.mockImplementationOnce(() => {
         return Promise.resolve({
           ok: true,
           clone: () => ({ json: () => Promise.resolve({}) }),
@@ -299,15 +298,14 @@ describe('useJobStore', () => {
         }
       });
 
-      mockFetch.mockImplementation((url) => {
-        if (typeof url === 'string' && url.includes('127.0.0.1:7781')) return Promise.resolve({ ok: true });
+      mockFetch.mockImplementation(() => {
         return Promise.resolve({
           ok: true,
           headers: { get: vi.fn().mockReturnValue('10') },
           clone: () => ({ json: () => Promise.resolve({}) }),
           json: () => Promise.resolve({
             jobs: [
-              { id: 'job1', status: 'PROCESSING' },
+              { id: 'job1', status: 'PROCESSING', retryAfterSeconds: 3 },
               { 
                 id: 'job2', 
                 status: 'COMPLETED', 
@@ -323,13 +321,47 @@ describe('useJobStore', () => {
       const state = useJobStore.getState();
       
       expect(state.jobs['job1'].status).toBe('PROCESSING');
-      expect(state.jobs['job1'].nextPollAt).toBe(now + 10000); // 10s Retry-After
+      expect(state.jobs['job1'].nextPollAt).toBe(now + 3000); // per-job retryAfterSeconds
       
       expect(state.jobs['job2'].status).toBe('COMPLETED');
       expect(state.jobs['job2'].result?.url).toBe('new_url');
       expect(state.jobs['job2'].result?.status).toBe('NEEDS_REVIEW');
       
       vi.restoreAllMocks();
+    });
+
+    it('fetchStyleProfiles should no-op on non-ok response', async () => {
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
+      );
+      await useJobStore.getState().fetchStyleProfiles();
+      expect(useJobStore.getState().styleProfiles).toEqual([]);
+    });
+
+    it('fetchStyleProfiles should catch network errors', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch.mockImplementationOnce(() => Promise.reject(new Error('net')));
+      await useJobStore.getState().fetchStyleProfiles();
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('deleteStyleProfile should remove profile on success', async () => {
+      useJobStore.setState({
+        styleProfiles: [{ id: 'p1', name: 'a', createdAt: 1 }],
+      });
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: true }));
+      await useJobStore.getState().deleteStyleProfile('p1');
+      expect(useJobStore.getState().styleProfiles).toEqual([]);
+    });
+
+    it('deleteStyleProfile should no-op on failure', async () => {
+      useJobStore.setState({
+        styleProfiles: [{ id: 'p1', name: 'a', createdAt: 1 }],
+      });
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
+      await useJobStore.getState().deleteStyleProfile('p1');
+      expect(useJobStore.getState().styleProfiles).toHaveLength(1);
     });
   });
 });

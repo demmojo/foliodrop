@@ -80,27 +80,20 @@ export function groupPhotosIntoScenes(photos: PhotoMeta[], maxGapMs: number = 25
       
       let isNewScene = false;
 
-      // #region agent log
-      try {
-        fetch('http://127.0.0.1:7781/ingest/a6897ccc-a1f3-4fc8-8c4a-1b64d961de9c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ca7b1'},body:JSON.stringify({sessionId:'8ca7b1',hypothesisId:'H_GROUPING',location:'exif.ts:grouping',message:'evaluating photo for new scene',data:{fileName: photo.file.name, gap, currentGroupLen: currentGroup.length, exposureComp: photo.exposureCompensation, hasExifTime: photo.captureTime !== photo.file.lastModified},timestamp:Date.now()})}).catch(()=>{});
-      } catch(e) {}
-      // #endregion
-
-    // 1. Time gap > 2.5s usually means a new bracketed set
-    if (gap > maxGapMs) {
-      isNewScene = true;
-    }
-    // 2. If gap is very small but exposure compensation repeats, it's a new set
-    else if (photo.exposureCompensation !== undefined && currentGroup.length >= 3) {
-       if (photo.exposureCompensation === currentGroup[0].exposureCompensation) {
+      // 1. Time gap > 2.5s usually means a new bracketed set
+      if (gap > maxGapMs) {
+        isNewScene = true;
+      }
+      // 2. If gap is very small but exposure compensation repeats, it's a new set
+      else if (photo.exposureCompensation !== undefined && currentGroup.length >= 3) {
+        if (photo.exposureCompensation === currentGroup[0].exposureCompensation) {
           isNewScene = true;
-       }
-    }
-    else if (photo.exposureTime !== undefined && currentGroup.length >= 3) {
-       if (photo.exposureTime === currentGroup[0].exposureTime) {
+        }
+      } else if (photo.exposureTime !== undefined && currentGroup.length >= 3) {
+        if (photo.exposureTime === currentGroup[0].exposureTime) {
           isNewScene = true;
-       }
-    }
+        }
+      }
 
       if (isNewScene) {
         groups.push({

@@ -27,13 +27,6 @@ class FinalizeJobUseCase:
         new_jobs = []
         
         if groups_data:
-            # #region agent log
-            import json, time
-            try:
-                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
-                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_GROUPS","location":"FinalizeJobUseCase:execute","message":"received groups_data","data":{"num_groups":len(groups_data), "sizes": [len(g.get("files", [])) for g in groups_data]},"timestamp":int(time.time()*1000)}) + "\n")
-            except Exception: pass
-            # #endregion
             for idx, group in enumerate(groups_data):
                 room_name = group.get("name", f"Scene {idx + 1}")
                 filenames = group.get("files", [])
@@ -52,13 +45,6 @@ class FinalizeJobUseCase:
                 
         elif files_data:
             from backend.core.grouping import group_photos, Photo, ExifData
-            # #region agent log
-            import json, time
-            try:
-                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
-                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_GROUPS","location":"FinalizeJobUseCase:execute:fallback","message":"using fallback files_data","data":{},"timestamp":int(time.time()*1000)}) + "\n")
-            except Exception: pass
-            # #endregion
             photos = []
             for file in files_data:
                 dt = datetime.datetime.fromtimestamp(file["timestamp"] / 1000.0, tz=datetime.timezone.utc)
@@ -195,14 +181,6 @@ class ProcessHdrGroupUseCase:
             fused_base_bytes = encoded_base.tobytes()
             
             # We will use the middle bracket (median brightness) as the "original" before comparison
-            # #region agent log
-            import json, time
-            try:
-                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
-                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_PROCESS","location":"ProcessHdrGroupUseCase:execute","message":"received photos in worker","data":{"job_id":job_id,"room":room,"photos":photos,"len_downsampled":len(downsampled_images)},"timestamp":int(time.time()*1000)}) + "\n")
-            except Exception: pass
-            # #endregion
-            
             brightness_sorted = sorted(downsampled_images, key=lambda x: x.mean())
             mid_idx = len(brightness_sorted) // 2
             _, encoded_orig = cv2.imencode('.jpg', brightness_sorted[mid_idx], [cv2.IMWRITE_JPEG_QUALITY, 90])

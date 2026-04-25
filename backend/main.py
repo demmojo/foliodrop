@@ -120,38 +120,17 @@ def generate_random_code(fallback=False):
 
 @app.get("/api/v1/sessions/generate")
 def generate_session(db: IDatabase = Depends(get_database)):
-    # #region agent log
-    import json, time
-    try:
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-1f05a0.log", "a") as f:
-            f.write(json.dumps({"sessionId":"1f05a0","hypothesisId":"H2","location":"generate_session:start","message":"generating session code","data":{},"timestamp":int(time.time()*1000)}) + "\n")
-    except Exception: pass
-    # #endregion
-    
     attempts = 0
     # Try up to 20 times without numbers, then 10 times with numbers
     for fallback in [False] * 20 + [True] * 10:
         attempts += 1
         code = generate_random_code(fallback)
         is_avail = db.check_session_code_availability(code)
-        
-        # #region agent log
-        try:
-            with open("/home/demmojo/real-estate-hdr/.cursor/debug-1f05a0.log", "a") as f:
-                f.write(json.dumps({"sessionId":"1f05a0","hypothesisId":"H1","location":"generate_session:loop","message":"checked code","data":{"code":code,"is_avail":is_avail,"attempt":attempts},"timestamp":int(time.time()*1000)}) + "\n")
-        except Exception: pass
-        # #endregion
 
         if is_avail:
             db.reserve_session_code(code)
             return {"code": code}
-            
-    # #region agent log
-    try:
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-1f05a0.log", "a") as f:
-            f.write(json.dumps({"sessionId":"1f05a0","hypothesisId":"H2","location":"generate_session:fail","message":"failed to generate code after 10 attempts","data":{},"timestamp":int(time.time()*1000)}) + "\n")
-    except Exception: pass
-    # #endregion
+
     raise HTTPException(status_code=500, detail="Failed to generate room code")
 
 class ValidateSessionRequest(BaseModel):
@@ -159,30 +138,11 @@ class ValidateSessionRequest(BaseModel):
 
 @app.post("/api/v1/sessions/validate")
 def validate_session(req: ValidateSessionRequest, db: IDatabase = Depends(get_database)):
-    # #region agent log
-    try:
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-1f05a0.log", "a") as f:
-            f.write(json.dumps({"sessionId":"1f05a0","hypothesisId":"H4","location":"validate_session:start","message":"validating code","data":{"code":req.code},"timestamp":int(time.time()*1000)}) + "\n")
-    except Exception: pass
-    # #endregion
-    
     if len(req.code) < 3:
         sugg = generate_random_code()
-        # #region agent log
-        try:
-            with open("/home/demmojo/real-estate-hdr/.cursor/debug-1f05a0.log", "a") as f:
-                f.write(json.dumps({"sessionId":"1f05a0","hypothesisId":"H4","location":"validate_session:len","message":"code too short","data":{"code":req.code,"suggested":sugg},"timestamp":int(time.time()*1000)}) + "\n")
-        except Exception: pass
-        # #endregion
         return {"valid": False, "message": "Code must be at least 3 letters", "suggested": sugg}
     
     is_avail = db.check_session_code_availability(req.code)
-    # #region agent log
-    try:
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-1f05a0.log", "a") as f:
-            f.write(json.dumps({"sessionId":"1f05a0","hypothesisId":"H4","location":"validate_session:check","message":"check availability","data":{"code":req.code,"is_avail":is_avail},"timestamp":int(time.time()*1000)}) + "\n")
-    except Exception: pass
-    # #endregion
     
     if not is_avail:
         # Let's see what happens here, wait, originally the code was:

@@ -104,6 +104,61 @@ def test_compute_structural_diff_no_homography():
                 is_valid, _, _ = compute_structural_diff(img, img)
                 assert not is_valid
 
+def test_compute_structural_diff_insufficient_matches_low_texture_soft_pass():
+    """Low-texture scenes: <10 good matches should soft-pass instead of hard-fail."""
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    with patch("backend.core.generation_loop.cv2.SIFT_create") as mock_sift:
+        with patch("backend.core.generation_loop.cv2.FlannBasedMatcher") as mock_flann:
+            mock_sift_inst = MagicMock()
+            mock_sift.return_value = mock_sift_inst
+            n = 20
+            kp = [MagicMock(pt=(float(i % 10), float(i // 10))) for i in range(n)]
+            des = np.zeros((n, 128), dtype=np.float32)
+            mock_sift_inst.detectAndCompute.return_value = (kp, des)
+            mock_flann_inst = MagicMock()
+            mock_flann.return_value = mock_flann_inst
+            # Exactly 9 Lowe ratio passes -> len(good_matches) < 10, low-texture -> soft pass
+            mock_matches = []
+            for i in range(9):
+                m1 = MagicMock(queryIdx=i, trainIdx=i, distance=0.1)
+                m2 = MagicMock(queryIdx=i, trainIdx=i, distance=0.9)
+                mock_matches.append([m1, m2])
+            for i in range(9, 20):
+                m1 = MagicMock(queryIdx=i, trainIdx=i, distance=0.8)
+                m2 = MagicMock(queryIdx=i, trainIdx=i, distance=0.85)
+                mock_matches.append([m1, m2])
+            mock_flann_inst.knnMatch.return_value = mock_matches
+            is_valid, r1, r2 = compute_structural_diff(img, img)
+            assert is_valid
+            assert r1 == 1.0
+            assert r2 == 0.0
+
+
+def test_compute_structural_diff_no_homography_low_texture_soft_pass():
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    with patch("backend.core.generation_loop.cv2.findHomography") as mock_find:
+        with patch("backend.core.generation_loop.cv2.SIFT_create") as mock_sift:
+            with patch("backend.core.generation_loop.cv2.FlannBasedMatcher") as mock_flann:
+                mock_sift_inst = MagicMock()
+                mock_sift.return_value = mock_sift_inst
+                kp = [MagicMock(pt=(float(i), float(i))) for i in range(12)]
+                des = np.zeros((12, 128), dtype=np.float32)
+                mock_sift_inst.detectAndCompute.return_value = (kp, des)
+                mock_flann_inst = MagicMock()
+                mock_flann.return_value = mock_flann_inst
+                mock_matches = []
+                for i in range(12):
+                    m1 = MagicMock(queryIdx=i, trainIdx=i, distance=0.1)
+                    m2 = MagicMock(queryIdx=i, trainIdx=i, distance=0.9)
+                    mock_matches.append([m1, m2])
+                mock_flann_inst.knnMatch.return_value = mock_matches
+                mock_find.return_value = (None, None)
+                is_valid, r1, r2 = compute_structural_diff(img, img)
+                assert is_valid
+                assert r1 == 1.0
+                assert r2 == 0.0
+
+
 def test_compute_structural_diff_bad_matches():
     img = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
     with patch("backend.core.generation_loop.cv2.SIFT_create") as mock_sift:
@@ -221,6 +276,28 @@ async def test_generate_hybrid_hdr_no_parts():
     mock_file = MagicMock()
     with pytest.raises(GenerationError, match="No parts in response"):
         await generate_hybrid_hdr(client, mock_file, [])
+
+@pytest.mark.asyncio
+async def test_generate_hybrid_hdr_with_training_pairs():
+    client = MagicMock()
+    mock_file = MagicMock()
+    mock_file.name = "fused"
+    mock_response = MagicMock()
+    mock_part = MagicMock()
+    mock_part.inline_data.data = b"out"
+    mock_response.parts = [mock_part]
+    client.aio.models.generate_content = __import__("unittest.mock").mock.AsyncMock(return_value=mock_response)
+    training_pairs = [{"bracket_urls": ["http://a.jpg"], "final_url": "http://final.jpg"}]
+    with patch("google.genai.types.Part.from_uri") as mock_from_uri:
+        mock_from_uri.return_value = "part"
+        out, status = await generate_hybrid_hdr(
+            client, mock_file, [mock_file],
+            training_pairs=training_pairs,
+        )
+    assert out == b"out"
+    assert status == {"status": "success"}
+    assert mock_from_uri.call_count >= 2
+
 
 @pytest.mark.asyncio
 async def test_generate_hybrid_hdr_no_inline_data():

@@ -265,21 +265,6 @@ class GCSBlobStorageAdapter(IBlobStorage):
                     
             except Exception as e:
                 logger.error(f"Error signing URL: {e}")
-                # #region agent log
-                try:
-                    payload = {
-                        "sessionId": "769fb2",
-                        "hypothesisId": "H5",
-                        "location": "backend/infrastructure/adapters.py:generate_upload_urls",
-                        "message": "Error signing URL",
-                        "data": {"error": str(e), "service_account": service_account_email},
-                        "timestamp": int(datetime.datetime.now().timestamp() * 1000)
-                    }
-                    with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
-                        f.write(json.dumps(payload) + "\n")
-                except Exception:
-                    pass
-                # #endregion
                 # Fallback to a fake URL only if signing fails
                 url = f"https://fake-upload/{blob_name}"
 
@@ -288,23 +273,7 @@ class GCSBlobStorageAdapter(IBlobStorage):
                 url = url.replace("http://storage.googleapis.com", "https://storage.googleapis.com", 1)
 
             urls.append({"file": file, "url": url, "path": blob_name})
-            
-            # #region agent log
-            try:
-                payload = {
-                    "sessionId": "769fb2",
-                    "hypothesisId": "H4",
-                    "location": "backend/infrastructure/adapters.py:generate_upload_urls",
-                    "message": "Generated URL",
-                    "data": {"file": file, "url": url, "bucket": self.bucket_name},
-                    "timestamp": int(datetime.datetime.now().timestamp() * 1000)
-                }
-                with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
-                    f.write(json.dumps(payload) + "\n")
-            except Exception:
-                pass
-            # #endregion
-            
+
         return urls
 
     def download_blobs(self, session_id: str, filenames: List[str]) -> List[bytes]:
@@ -422,28 +391,6 @@ class CloudTasksAdapter(ITaskQueue):
             self.client.create_task(request={"parent": self.queue_path, "task": task})
         except Exception as e:
             logger.error(f"Failed to enqueue task: {e}")
-            # #region agent log
-            try:
-                import json, time
-                payload = {"sessionId":"daa93d","hypothesisId":"H1","location":"backend/infrastructure/adapters.py:enqueue_job","message":"enqueue task failed","data":{"error": str(e)},"timestamp":int(time.time()*1000)}
-                with open("/home/demmojo/real-estate-hdr/.cursor/debug-daa93d.log", "a") as f: f.write(json.dumps(payload) + "\n")
-            except Exception: pass
-            # #endregion
-            # #region agent log
-            try:
-                payload = {
-                    "sessionId": "769fb2",
-                    "hypothesisId": "H6",
-                    "location": "backend/infrastructure/adapters.py:enqueue_job",
-                    "message": "Error enqueuing task",
-                    "data": {"error": str(e)},
-                    "timestamp": int(datetime.datetime.now().timestamp() * 1000)
-                }
-                with open("/home/demmojo/real-estate-hdr/.cursor/debug-769fb2.log", "a") as f:
-                    f.write(json.dumps(payload) + "\n")
-            except Exception:
-                pass
-            # #endregion
 
 
 class RedisPubSubAdapter(IEventPublisher, IProgressSubscriber):

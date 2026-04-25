@@ -5,33 +5,16 @@ import numpy as np
 import cv2
 import gc
 
-# region agent log
-import json
-import time
-
-def _log_debug(loc, msg, data, hyp_id):
-    try:
-        payload = {
-            "sessionId": "21d841",
-            "runId": "debug-run-1",
-            "hypothesisId": hyp_id,
-            "location": loc,
-            "message": msg,
-            "data": data,
-            "timestamp": int(time.time() * 1000)
-        }
-        with open("/home/demmojo/real-estate-hdr/.cursor/debug-21d841.log", "a") as f:
-            f.write(json.dumps(payload) + "\n")
-    except Exception:
-        pass
-# endregion
-
 from typing import Tuple, List
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
 logger = logging.getLogger(__name__)
+
+
+def _log_debug(loc, msg, data, hyp_id):
+    logger.debug("%s | %s | %s | %s", loc, msg, data, hyp_id)
 
 # Hard structural rules as system instruction (Leeropedia: system constraints beat conflicting user text;
 # avoid prompts that require "window views" when the scene may have no windows).

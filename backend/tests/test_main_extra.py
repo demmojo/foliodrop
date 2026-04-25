@@ -85,6 +85,66 @@ def test_group_photos_real_key_success():
             assert response.status_code == 200
             assert response.json()["groups"] == [["file1.jpg", "file2.jpg"]]
 
+def test_group_photos_real_key_malformed_thumbnail_still_runs():
+    import os
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"}):
+        with patch("google.genai.Client") as mock_client:
+            inst = MagicMock()
+            inst.models.generate_content = MagicMock(
+                return_value=MagicMock(text='[["a.jpg", "b.jpg"]]')
+            )
+            mock_client.return_value = inst
+            response = client.post(
+                "/api/v1/group-photos",
+                json={"files": [
+                    {"name": "bad.jpg", "thumbnail": "~~~not-base64~~~"},
+                    {"name": "b.jpg", "thumbnail": "dGVzdA=="},
+                ]},
+            )
+    assert response.status_code == 200
+    assert response.json()["groups"] == [["a.jpg", "b.jpg"]]
+
+
+def test_group_photos_response_strips_markdown_fences():
+    import os
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"}):
+        with patch("google.genai.Client") as mock_client:
+            inst = MagicMock()
+            inst.models.generate_content = MagicMock(
+                return_value=MagicMock(text='```\n[["x.jpg", "y.jpg"]]\n```')
+            )
+            mock_client.return_value = inst
+            response = client.post(
+                "/api/v1/group-photos",
+                json={"files": [
+                    {"name": "x.jpg", "thumbnail": "dGVzdA=="},
+                    {"name": "y.jpg", "thumbnail": "dGVzdA=="},
+                ]},
+            )
+    assert response.status_code == 200
+    assert response.json()["groups"] == [["x.jpg", "y.jpg"]]
+
+
+def test_group_photos_real_key_invalid_json_shape_falls_back():
+    import os
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"}):
+        with patch("google.genai.Client") as mock_client:
+            inst = MagicMock()
+            inst.models.generate_content = MagicMock(
+                return_value=MagicMock(text='["a.jpg", "b.jpg"]')
+            )
+            mock_client.return_value = inst
+            response = client.post(
+                "/api/v1/group-photos",
+                json={"files": [
+                    {"name": "a.jpg", "thumbnail": "dGVzdA=="},
+                    {"name": "b.jpg", "thumbnail": "dGVzdA=="},
+                ]},
+            )
+    assert response.status_code == 200
+    assert response.json()["groups"] == [["a.jpg", "b.jpg"]]
+
+
 def test_group_photos_real_key_error():
     import os
     with patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"}):

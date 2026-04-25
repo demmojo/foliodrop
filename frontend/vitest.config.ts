@@ -12,11 +12,13 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.d.ts'],
+      // Full UI (UploadFlow export/share, WebGL, login !auth) needs E2E or very heavy mocks
+      // for 100% line+branch. Store and utils are at or near 100% after the latest tests.
       thresholds: {
-        lines: 90,
-        functions: 75,
-        branches: 75,
-        statements: 90
+        lines: 93,
+        functions: 87,
+        branches: 84,
+        statements: 93
       }
     },
   },

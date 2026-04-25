@@ -9,6 +9,7 @@
   "scripts": {
     "test:backend": "python3 -m pytest backend/tests/",
     "test:frontend": "cd frontend && npm run test",
+    "test:e2e": "npx playwright test e2e/",
     "test:coverage": "cd frontend && npm run test:coverage",
     "test": "npm run test:backend && npm run test:frontend",
     "build:frontend": "cd frontend && npm run build",

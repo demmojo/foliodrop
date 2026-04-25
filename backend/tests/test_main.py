@@ -155,3 +155,8 @@ def test_override_job_image_error():
         resp = client.post("/api/v1/jobs/missing_override/override", files={"file": ("test.jpg", f, "image/jpeg")})
     assert resp.status_code == 400
     os.remove("test.jpg")
+
+
+def test_log_debug_noop_does_not_raise():
+    from backend.main import _log_debug
+    _log_debug("message", {"k": 1}, hyp="H0")

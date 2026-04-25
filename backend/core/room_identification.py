@@ -4,7 +4,7 @@ import asyncio
 
 class IRoomIdentificationStrategy(ABC):
     @abstractmethod
-    async def identify_room(self, image_url: str, metadata: Dict[str, Any]) -> str:
+    async def identify_room(self, image_url: str, metadata: Dict[str, Any]) -> str:  # pragma: no cover
         pass
 
 class GeminiRoomIdentificationStrategy(IRoomIdentificationStrategy):

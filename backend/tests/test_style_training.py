@@ -19,6 +19,13 @@ def client():
         
     app.dependency_overrides.clear()
 
+def test_delete_style_profile_not_found(client):
+    c, _db, _storage = client
+    response = c.delete("/api/v1/style/profiles/nonexistent-id-12345")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
 def test_upload_style_image(client):
     c, db, storage = client
 

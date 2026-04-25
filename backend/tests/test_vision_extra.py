@@ -38,6 +38,13 @@ def test_apply_real_estate_heuristics_success():
     # The return type should be uint8 in [0, 255]
     assert res.dtype == np.uint8
 
+def test_apply_real_estate_heuristics_resizes_darkest_when_mismatched_shape():
+    fused = np.ones((20, 20, 3), dtype=np.float32) * 0.95
+    darkest = np.ones((8, 8, 3), dtype=np.uint8) * 50
+    out = apply_real_estate_heuristics(fused, darkest)
+    assert out.shape == (20, 20, 3)
+
+
 def test_apply_real_estate_heuristics_recovers_bright_windows_from_darkest():
     # Simulate a blown-out fused image and a darker bracket with detail.
     fused = np.ones((20, 20, 3), dtype=np.float32) * 0.98

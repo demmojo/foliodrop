@@ -170,14 +170,6 @@ class FakeTaskQueue(ITaskQueue):
     def enqueue_room_processing(self, session_id: str, room_name: str, photos: List[str]):
         pass
     def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str], agency_id: str = "default"):
-        # #region agent log
-        import json, time
-        try:
-            with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
-                f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_ENQUEUE","location":"FakeTaskQueue:enqueue_job","message":"enqueue job called","data":{"job_id":job_id,"room":room_name,"photos":photos,"agency_id":agency_id},"timestamp":int(time.time()*1000)}) + "\n")
-        except Exception: pass
-        # #endregion
-        
         # In a real system, this would push to Cloud Tasks. For local development/testing,
         # we can simulate the Cloud Task hitting our own webhook synchronously (or async task)
         import asyncio
@@ -185,13 +177,6 @@ class FakeTaskQueue(ITaskQueue):
             from backend.main import process_job_task, CloudTaskPayload
             from backend.main import get_database, get_blob_storage, get_event_publisher
             payload = CloudTaskPayload(job_id=job_id, session_id=session_id, room_name=room_name, photos=photos, agency_id=agency_id)
-            
-            # #region agent log
-            try:
-                with open("/home/demmojo/real-estate-hdr/.cursor/debug-8ca7b1.log", "a") as f:
-                    f.write(json.dumps({"sessionId":"8ca7b1","hypothesisId":"H_BACKEND_ENQUEUE","location":"FakeTaskQueue:simulate_webhook","message":"invoking process_job_task","data":{"payload":payload.dict()},"timestamp":int(time.time()*1000)}) + "\n")
-            except Exception: pass
-            # #endregion
             
             await process_job_task(
                 payload=payload,
