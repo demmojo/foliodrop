@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
-import UploadFlow from '@/components/UploadFlow';
+import dynamic from 'next/dynamic';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import AgencySettings from '@/components/AgencySettings';
@@ -10,6 +10,10 @@ import { useAuth } from '@/components/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
+import Link from 'next/link';
+import { LogOut, Settings } from 'lucide-react';
+
+const UploadFlow = dynamic(() => import('@/components/UploadFlow'), { ssr: false });
 
 export default function Home() {
   const { t } = useTranslation();
@@ -24,7 +28,11 @@ export default function Home() {
   }, [user, loading, router]);
 
   if (loading || !user) {
-    return <div className="min-h-screen flex items-center justify-center bg-background"><span className="animate-pulse">Loading...</span></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" role="status" aria-live="polite">
+        <span className="animate-pulse">Loading...</span>
+      </div>
+    );
   }
 
   const handleLogout = () => {
@@ -40,18 +48,26 @@ export default function Home() {
           <span className="font-mono text-[9px] md:text-[10px] uppercase tracking-widest px-1.5 py-0.5 bg-foreground text-background rounded-sm">{t('beta')}</span>
         </div>
         <div className="flex items-center gap-3 md:gap-6 relative z-40">
-          <span className="text-xs text-muted-foreground mr-2">{user.email}</span>
+          <span className="text-xs text-muted-foreground mr-2 hidden sm:inline-block">{user.email}</span>
+          <Link href="/how-it-works" className="text-sm font-medium hover:text-accent transition-colors hidden sm:inline-block">
+            How it works
+          </Link>
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className="text-sm font-medium hover:text-accent transition-colors"
+            aria-expanded={showSettings}
+            aria-controls="settings-panel"
+            className="text-sm font-medium hover:text-accent transition-colors flex items-center gap-2"
           >
-            {showSettings ? 'Close Settings' : 'Settings'}
+            <Settings className="w-4 h-4 sm:hidden" />
+            <span className="hidden sm:inline-block">{showSettings ? 'Close Settings' : 'Settings'}</span>
           </button>
           <button 
             onClick={handleLogout}
-            className="text-sm font-medium hover:text-red-500 transition-colors"
+            className="text-sm font-medium hover:text-red-500 transition-colors flex items-center gap-2"
+            aria-label="Logout"
           >
-            Logout
+            <LogOut className="w-4 h-4 sm:hidden" />
+            <span className="hidden sm:inline-block">Logout</span>
           </button>
           <LanguageSelector />
           <ThemeToggle />
@@ -60,7 +76,7 @@ export default function Home() {
 
       <div className="flex-1 flex flex-col w-full relative">
         {showSettings ? (
-          <div className="p-4 md:p-8">
+          <div id="settings-panel" className="p-4 md:p-8">
             <AgencySettings />
           </div>
         ) : (

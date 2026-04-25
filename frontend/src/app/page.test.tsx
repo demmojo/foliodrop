@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import Page from './page';
 
-vi.mock('../components/UploadFlow', () => ({
-  default: () => <div data-testid="upload-flow">Upload Flow</div>
+vi.mock('next/dynamic', () => ({
+  default: () => () => <div data-testid="upload-flow">Upload Flow</div>
 }));
 
 vi.mock('../components/AgencySettings', () => ({

@@ -36,7 +36,7 @@ describe('BeforeAfterSlider Component', () => {
     fireEvent.mouseDown(sliderContainer, { clientX: 500 });
     
     // The handle should be around 50%
-    const handle = container.querySelector('.bg-surface.cursor-ew-resize') as HTMLDivElement;
+    const handle = container.querySelector('.cursor-ew-resize') as HTMLDivElement;
     expect(handle.style.left).toBe('50%');
 
     // Move mouse
@@ -71,7 +71,7 @@ describe('BeforeAfterSlider Component', () => {
     // Start touch
     fireEvent.touchStart(sliderContainer, { touches: [{ clientX: 500 }] });
     
-    const handle = container.querySelector('.bg-surface.cursor-ew-resize') as HTMLDivElement;
+    const handle = container.querySelector('.cursor-ew-resize') as HTMLDivElement;
     expect(handle.style.left).toBe('50%');
 
     // Move touch
