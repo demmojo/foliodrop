@@ -29,11 +29,11 @@ def run_mertens_fusion(images: List[np.ndarray]) -> np.ndarray:
     res_mertens = np.clip(res_mertens, 0.0, 1.0)
     return res_mertens
 
-def apply_real_estate_heuristics(image_float: np.ndarray) -> np.ndarray:
+def apply_real_estate_heuristics(image_float: np.ndarray, darkest_bracket: np.ndarray | None = None) -> np.ndarray:
     """Applies deterministic polish and local contrast (CLAHE)."""
     if cv2 is None:
         raise ImportError("cv2 is required")
-    
+
     # Convert float32 BGR to float32 LAB
     lab_float = cv2.cvtColor(image_float, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab_float)
@@ -71,6 +71,25 @@ def apply_real_estate_heuristics(image_float: np.ndarray) -> np.ndarray:
     # Slight gamma correction to lift midtones/shadows before sending to GenAI
     gamma = 1.2
     unsharp = np.power(polished_float, 1.0 / gamma)
+
+    # Optional window highlight recovery:
+    # Do this at the end so later contrast steps do not re-clip recovered details.
+    if darkest_bracket is not None:
+        dark_float = darkest_bracket.astype(np.float32) / 255.0
+        if dark_float.shape[:2] != unsharp.shape[:2]:
+            dark_float = cv2.resize(
+                dark_float,
+                (unsharp.shape[1], unsharp.shape[0]),
+                interpolation=cv2.INTER_AREA,
+            )
+
+        fused_luma = cv2.cvtColor(unsharp, cv2.COLOR_BGR2GRAY)
+        dark_luma = cv2.cvtColor(dark_float, cv2.COLOR_BGR2GRAY)
+        blown_mask = (fused_luma > 0.90) & (dark_luma < (fused_luma - 0.05))
+        blend_alpha = np.clip((fused_luma - 0.90) / 0.10, 0.0, 1.0) * 0.85
+        blend_alpha = blend_alpha * blown_mask.astype(np.float32)
+        unsharp = unsharp * (1.0 - blend_alpha[:, :, None]) + dark_float * blend_alpha[:, :, None]
+        unsharp = np.clip(unsharp, 0.0, 1.0)
 
     # Downsample to 8-bit for final JPEG output
     bgr_8_out = np.clip(unsharp * 255.0, 0, 255).astype(np.uint8)

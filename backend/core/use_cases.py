@@ -169,10 +169,13 @@ class ProcessHdrGroupUseCase:
             del np_images
             gc.collect()
 
+            # Keep darkest bracket for deterministic window highlight recovery.
+            darkest_bracket = min(downsampled_images, key=lambda x: x.mean())
+
             # Run OpenCV pipeline
             aligned_images = await asyncio.to_thread(align_images, downsampled_images)
             res_16bit = await asyncio.to_thread(run_mertens_fusion, aligned_images)
-            final_bgr_8bit = await asyncio.to_thread(apply_real_estate_heuristics, res_16bit)
+            final_bgr_8bit = await asyncio.to_thread(apply_real_estate_heuristics, res_16bit, darkest_bracket)
             
             # Free intermediate arrays
             del aligned_images
@@ -207,16 +210,15 @@ class ProcessHdrGroupUseCase:
             
             # Encode only the darkest bracket to bytes for Gemini (Bracket Pruning)
             # This drastically reduces context size and prevents the VLM from being confused by overexposed brackets
-            darkest_img = min(downsampled_images, key=lambda x: x.mean())
-            _, enc_dark = cv2.imencode('.jpg', darkest_img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            _, enc_dark = cv2.imencode('.jpg', darkest_bracket, [cv2.IMWRITE_JPEG_QUALITY, 90])
             bracket_bytes_list = [enc_dark.tobytes()]
                 
             # Free bracket arrays
             del downsampled_images
             await asyncio.to_thread(gc.collect)
 
-            # GenAI Loop
-            from backend.core.generation_loop import generate_hybrid_hdr
+            # GenAI Loop with structural validation gate
+            from backend.core.generation_loop import generate_hybrid_hdr, compute_structural_diff
             from google import genai
             import os
             
@@ -286,10 +288,35 @@ class ProcessHdrGroupUseCase:
                             gen_img_bytes, gen_info = await generate_hybrid_hdr(
                                 client, fused_file, bracket_files, retry_count=attempt, style_urls=style_urls, training_pairs=training_pairs
                             )
-                            
-                            final_image_bytes = gen_img_bytes
-                            # We got a good generated image
-                            break
+
+                            # Deterministic structural gate: generated output must preserve room geometry.
+                            from backend.core.image_decoding import decode_image
+                            gen_cv_img = decode_image(gen_img_bytes)
+                            base_cv_img = decode_image(fused_base_bytes)
+                            is_valid, inlier_ratio, void_ratio = compute_structural_diff(base_cv_img, gen_cv_img)
+                            telemetry.append({
+                                "attempt": attempt,
+                                "is_valid": is_valid,
+                                "inlier_ratio": inlier_ratio,
+                                "void_ratio": void_ratio
+                            })
+
+                            del base_cv_img
+                            del gen_cv_img
+                            await asyncio.to_thread(gc.collect)
+
+                            if is_valid:
+                                final_image_bytes = gen_img_bytes
+                                break
+
+                            if attempt == max_retries:
+                                final_image_bytes = fused_base_bytes
+                                is_flagged = True
+                                report_data = {
+                                    "reason": "Structural consistency check failed after retries. Falling back to OpenCV base.",
+                                    "inlier_ratio": inlier_ratio,
+                                    "void_ratio": void_ratio
+                                }
                                     
                         except Exception as e:
                             import logging
@@ -358,7 +385,7 @@ class ProcessHdrGroupUseCase:
 
             job = self.db.get_job(job_id)
             if job:
-                self.db.save_job(job_id, session_id, "COMPLETED", job.get("idempotency_key", ""), result=result_payload)
+                self.db.save_job(job_id, session_id, status, job.get("idempotency_key", ""), result=result_payload)
 
             return result_payload
 

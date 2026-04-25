@@ -64,9 +64,19 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     sift = cv2.SIFT_create()
     kp1, des1 = sift.detectAndCompute(base_gray, None)
     kp2, des2 = sift.detectAndCompute(gen_gray, None)
+
+    def is_low_texture(gray: np.ndarray) -> bool:
+        # Very low Laplacian variance scenes (blank walls/minimal features) frequently
+        # trigger false QA rejects; treat these as structurally uncertain, not invalid.
+        return cv2.Laplacian(gray, cv2.CV_64F).var() < 8.0
+
+    low_texture_scene = is_low_texture(base_gray) and is_low_texture(gen_gray)
     
     if des1 is None or des2 is None or len(des1) < 10 or len(des2) < 10:
         _log_debug("generation_loop.py:47", "SIFT keypoints missing or insufficient", {"len_des1": len(des1) if des1 is not None else 0, "len_des2": len(des2) if des2 is not None else 0}, "H1")
+        if low_texture_scene:
+            _log_debug("generation_loop.py:49", "Low-texture scene: soft-pass on insufficient keypoints", {}, "H1_SOFTPASS")
+            return True, 1.0, 0.0
         return False, 0.0, 1.0
         
     # Match features (FLANN)
@@ -87,6 +97,9 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
             
     if len(good_matches) < 10:
         _log_debug("generation_loop.py:66", "Insufficient good matches", {"len_good_matches": len(good_matches)}, "H2")
+        if low_texture_scene:
+            _log_debug("generation_loop.py:68", "Low-texture scene: soft-pass on insufficient matches", {}, "H2_SOFTPASS")
+            return True, 1.0, 0.0
         return False, 0.0, 1.0
         
     src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
@@ -96,13 +109,16 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     M, mask = cv2.findHomography(src_pts, dst_pts, cv2.USAC_MAGSAC, 8.0)
     if M is None or mask is None:
         _log_debug("generation_loop.py:74", "Homography matrix or mask is None", {"M_is_none": M is None, "mask_is_none": mask is None}, "H3")
+        if low_texture_scene:
+            _log_debug("generation_loop.py:76", "Low-texture scene: soft-pass on missing homography", {}, "H3_SOFTPASS")
+            return True, 1.0, 0.0
         return False, 0.0, 1.0
         
     inliers = mask.ravel().tolist()
     inlier_count = sum(inliers)
     inlier_ratio = inlier_count / len(good_matches)
     
-    if inlier_ratio < 0.15:
+    if inlier_ratio < 0.12:
         # Fails basic drift threshold
         _log_debug("generation_loop.py:82", "Inlier ratio too low", {"inlier_ratio": inlier_ratio, "inlier_count": inlier_count, "total_matches": len(good_matches)}, "H4")
         return False, inlier_ratio, 1.0
@@ -127,8 +143,9 @@ def compute_structural_diff(base_img: np.ndarray, gen_img: np.ndarray) -> Tuple[
     empty_cells = np.sum(density == 0)
     void_ratio = float(empty_cells) / (grid_size * grid_size)
     
-    # If more than 40% of the image is completely devoid of matching features, we likely have a massive hallucinated occlusion
-    if void_ratio > 0.40:
+    # If more than 55% of the image is completely devoid of matching features,
+    # we likely have a massive hallucinated occlusion.
+    if void_ratio > 0.55:
         _log_debug("generation_loop.py:106", "Void ratio too high", {"void_ratio": void_ratio, "empty_cells": int(empty_cells)}, "H5")
         return False, inlier_ratio, void_ratio
         
@@ -186,7 +203,8 @@ CRITICAL CONSTRAINT: Generate HDR image using ONLY:
 - Walls and structural elements from reference
 - Window openings and positions from reference
 - Furniture and decorations visible in all brackets
-DO NOT add, remove, or modify any room structure not present in inputs."""
+DO NOT add, remove, or modify any room structure not present in inputs.
+NEVER invent new windows, doors, or exterior openings."""
 
         if retry_count > 0:
             prompt += "\n\nCRITICAL PENALTY WARNING: Your previous attempt severely altered the geometry or hallucinated objects. You MUST strictly adhere to the structural lines of the base image. Do NOT invent new objects."

@@ -115,7 +115,8 @@ async def test_process_hdr_large_image_and_malloc_trim_fail():
 @patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"})
 @patch("google.genai.Client")
 @patch("backend.core.generation_loop.generate_hybrid_hdr")
-async def test_process_hdr_with_real_key_success(mock_generate, mock_client):
+@patch("backend.core.generation_loop.compute_structural_diff")
+async def test_process_hdr_with_real_key_success(mock_compute_diff, mock_generate, mock_client):
     event_publisher = FakeEventPublisher()
     task_queue = FakeTaskQueue()
     storage = FakeBlobStorage()
@@ -130,12 +131,38 @@ async def test_process_hdr_with_real_key_success(mock_generate, mock_client):
     db.save_job(job_id, "session", "PENDING", "key_3")
     
     mock_generate.return_value = (fake_bytes, {"status": "success"})
+    mock_compute_diff.return_value = (True, 0.9, 0.0)
     
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
     result = await use_case.execute("fake-agency", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
     assert result["status"] == "COMPLETED"
 
-# test_process_hdr_with_real_key_failure_fallback removed as Structural QA was removed
+@pytest.mark.asyncio
+@patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"})
+@patch("google.genai.Client")
+@patch("backend.core.generation_loop.generate_hybrid_hdr")
+@patch("backend.core.generation_loop.compute_structural_diff")
+async def test_process_hdr_with_real_key_structural_failure_fallback(mock_compute_diff, mock_generate, mock_client):
+    event_publisher = FakeEventPublisher()
+    task_queue = FakeTaskQueue()
+    storage = FakeBlobStorage()
+    db = FakeDatabase()
+    
+    img = np.zeros((10, 10, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".jpg", img)
+    fake_bytes = encoded.tobytes()
+    storage.download_blobs = lambda s, f: [fake_bytes, fake_bytes]
+    
+    job_id = "test_job_4"
+    db.save_job(job_id, "session", "PENDING", "key_4")
+    
+    mock_generate.return_value = (fake_bytes, {"status": "success"})
+    mock_compute_diff.return_value = (False, 0.05, 0.6)
+    
+    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
+    result = await use_case.execute("fake-agency", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
+    assert result["status"] == "FLAGGED"
+    assert result["isFlagged"] is True
 
 
 @pytest.mark.asyncio

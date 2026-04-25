@@ -37,3 +37,14 @@ def test_apply_real_estate_heuristics_success():
     res = apply_real_estate_heuristics(img)
     # The return type should be uint8 in [0, 255]
     assert res.dtype == np.uint8
+
+def test_apply_real_estate_heuristics_recovers_bright_windows_from_darkest():
+    # Simulate a blown-out fused image and a darker bracket with detail.
+    fused = np.ones((20, 20, 3), dtype=np.float32) * 0.98
+    darkest = np.ones((20, 20, 3), dtype=np.uint8) * 120
+
+    res_no_dark = apply_real_estate_heuristics(fused)
+    res_with_dark = apply_real_estate_heuristics(fused, darkest)
+
+    # Window-highlight recovery should reduce clipping (lower average intensity).
+    assert res_with_dark.mean() < res_no_dark.mean()
