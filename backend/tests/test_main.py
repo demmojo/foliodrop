@@ -124,6 +124,26 @@ def test_get_active_jobs():
     assert len(jobs) == 5
     assert "original_url" in jobs[0]["result"]
 
+def test_get_active_jobs_includes_signed_urls_for_flagged():
+    from backend.main import get_database
+    db = get_database()
+    db.save_job(
+        "job_flagged_1",
+        "session_flagged",
+        "FLAGGED",
+        "key_flagged_1",
+        result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"},
+    )
+
+    resp = client.get("/api/v1/jobs/active?session_id=session_flagged")
+    assert resp.status_code == 200
+    jobs = resp.json()["jobs"]
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "FLAGGED"
+    assert "url" in jobs[0]["result"]
+    assert "thumb_url" in jobs[0]["result"]
+    assert "original_url" in jobs[0]["result"]
+
 def test_batch_status():
     from backend.main import get_database
     db = get_database()
@@ -138,6 +158,26 @@ def test_batch_status():
     assert resp.status_code == 200
     jobs = resp.json()["jobs"]
     assert len(jobs) == 4
+
+def test_batch_status_includes_signed_urls_for_flagged():
+    from backend.main import get_database
+    db = get_database()
+    db.save_job(
+        "job_batch_flagged",
+        "session",
+        "FLAGGED",
+        "key_batch_flagged",
+        result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"},
+    )
+    req = {"job_ids": ["job_batch_flagged"]}
+    resp = client.post("/api/v1/jobs/batch-status", json=req)
+    assert resp.status_code == 200
+    jobs = resp.json()["jobs"]
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "FLAGGED"
+    assert "url" in jobs[0]["result"]
+    assert "thumb_url" in jobs[0]["result"]
+    assert "original_url" in jobs[0]["result"]
 
 def test_batch_signed_url():
     req = {"blob_paths": ["path1", "path2"]}

@@ -18,11 +18,12 @@ def run_mertens_fusion(images: List[np.ndarray]) -> np.ndarray:
     if cv2 is None:
         raise ImportError("cv2 is required")
     print("Running Mertens Exposure Fusion (32-bit float)")
-    # Best practice for Real Estate HDR window preservation: 
-    # Increase exposure weight significantly to penalize blown-out windows, pulling in darker exposures.
-    # Increase saturation weight to preserve vibrant greens/blues from the window.
-    # Lower contrast weight slightly to prevent overly harsh local contrast.
-    merge_mertens = cv2.createMergeMertens(contrast_weight=0.7, saturation_weight=1.5, exposure_weight=2.0)
+    # Balanced real-estate fusion: keep highlight detail and color depth, but avoid brittle local contrast.
+    merge_mertens = cv2.createMergeMertens(
+        contrast_weight=0.6,
+        saturation_weight=1.2,
+        exposure_weight=2.4,
+    )
     # Returns float32 in roughly [0, 1]
     res_mertens = merge_mertens.process(images)
     # Strictly clip to [0.0, 1.0] to prevent wraparound
@@ -42,9 +43,8 @@ def apply_real_estate_heuristics(image_float: np.ndarray, darkest_bracket: np.nd
     l_16 = np.clip((l / 100.0) * 65535.0, 0, 65535).astype(np.uint16)
     
     # Apply CLAHE
-    # For a 2K image, 8x8 gives massive 256px tiles leading to halo sweeps. Use 16x16.
-    # Lower clipLimit from 1.2 to 0.8 to further reduce "stark/aggressive" HDR contrast and blotches.
-    clahe = cv2.createCLAHE(clipLimit=0.8, tileGridSize=(16, 16))
+    # Keep midtone lift subtle while preserving local edge transitions on walls/trim.
+    clahe = cv2.createCLAHE(clipLimit=0.9, tileGridSize=(12, 12))
     l_clahe = clahe.apply(l_16)
     
     # Scale back to float32 L channel [0.0, 100.0]
@@ -54,8 +54,8 @@ def apply_real_estate_heuristics(image_float: np.ndarray, darkest_bracket: np.nd
     # Blur the L channel
     gaussian_blur = cv2.GaussianBlur(l_out_float, (0, 0), 2.0)
     # unsharp_mask = original + (original - blur) * amount
-    # Lower amount from 0.25 to 0.15 to prevent fine details from becoming overly crunchy and harsh
-    l_unsharp = l_out_float + (l_out_float - gaussian_blur) * 0.15
+    # Slightly stronger unsharp to recover micro-detail without pushing "crunchy HDR".
+    l_unsharp = l_out_float + (l_out_float - gaussian_blur) * 0.18
     # Clip to valid L range
     l_unsharp = np.clip(l_unsharp, 0.0, 100.0)
     
@@ -65,12 +65,15 @@ def apply_real_estate_heuristics(image_float: np.ndarray, darkest_bracket: np.nd
     
     # 1. Edge-Preserving Noise Reduction
     # Decrease sigmaColor to prevent large blotchy "watercolor" areas on flat walls
-    # d=5, sigmaColor=0.05, sigmaSpace=10.0
-    polished_float = cv2.bilateralFilter(bgr_out_float, d=5, sigmaColor=0.05, sigmaSpace=10.0)
+    polished_float = cv2.bilateralFilter(bgr_out_float, d=5, sigmaColor=0.06, sigmaSpace=9.0)
     
-    # Slight gamma correction to lift midtones/shadows before sending to GenAI
-    gamma = 1.2
-    unsharp = np.power(polished_float, 1.0 / gamma)
+    # Gentle tone remap to keep interiors bright while preserving contrast in corners.
+    gamma = 1.12
+    unsharp = np.power(np.clip(polished_float, 0.0, 1.0), 1.0 / gamma)
+
+    # Soft S-curve for clearer subject contrast without hard clipping in highlights.
+    contrast_gain = 1.06
+    unsharp = np.clip((unsharp - 0.5) * contrast_gain + 0.5, 0.0, 1.0)
 
     # Optional window highlight recovery:
     # Do this at the end so later contrast steps do not re-clip recovered details.
@@ -85,8 +88,8 @@ def apply_real_estate_heuristics(image_float: np.ndarray, darkest_bracket: np.nd
 
         fused_luma = cv2.cvtColor(unsharp, cv2.COLOR_BGR2GRAY)
         dark_luma = cv2.cvtColor(dark_float, cv2.COLOR_BGR2GRAY)
-        blown_mask = (fused_luma > 0.90) & (dark_luma < (fused_luma - 0.05))
-        blend_alpha = np.clip((fused_luma - 0.90) / 0.10, 0.0, 1.0) * 0.85
+        blown_mask = (fused_luma > 0.88) & (dark_luma < (fused_luma - 0.04))
+        blend_alpha = np.clip((fused_luma - 0.88) / 0.12, 0.0, 1.0) * 0.75
         blend_alpha = blend_alpha * blown_mask.astype(np.float32)
         unsharp = unsharp * (1.0 - blend_alpha[:, :, None]) + dark_float * blend_alpha[:, :, None]
         unsharp = np.clip(unsharp, 0.0, 1.0)

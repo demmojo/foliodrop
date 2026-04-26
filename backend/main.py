@@ -284,8 +284,8 @@ def get_active_jobs(session_id: str, db: IDatabase = Depends(get_database), stor
             "error": job.get("error")
         }
         
-        # If completed, generate signed URLs
-        if job["status"] == "COMPLETED" and "result" in job:
+        # If reviewable, generate signed URLs
+        if job["status"] in {"COMPLETED", "FLAGGED"} and "result" in job:
             if "blob_path" in job["result"]:
                 job_status["result"]["url"] = storage.generate_signed_url(job["result"]["blob_path"])
             if "thumb_blob_path" in job["result"]:
@@ -311,8 +311,8 @@ def get_batch_status(req: BatchStatusRequest, db: IDatabase = Depends(get_databa
             "error": job.get("error")
         }
         
-        # If completed, generate signed URLs
-        if job["status"] == "COMPLETED" and "result" in job:
+        # If reviewable, generate signed URLs
+        if job["status"] in {"COMPLETED", "FLAGGED"} and "result" in job:
             if "blob_path" in job["result"]:
                 job_status["result"]["url"] = storage.generate_signed_url(job["result"]["blob_path"])
             if "thumb_blob_path" in job["result"]:

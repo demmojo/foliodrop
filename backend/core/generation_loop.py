@@ -185,13 +185,21 @@ async def generate_hybrid_hdr(
 
         # Prompt: polish and exposure only; structural rules live in system_instruction to avoid
         # conflicting "must show window view" vs "never invent windows" (hallucination driver).
-        prompt = """Polish this interior for a high-end real estate listing.
+        prompt = """Polish this interior for a premium real-estate listing while preserving exact geometry from the fused base.
 
-Aesthetic: soft natural light, smooth walls and ceilings, fine edge detail without crunchy sharpening. No HDR halos, harsh local contrast, or blotchy texture. Gently lift shadows; avoid crushed blacks. Wood should look rich, not murky. Overall balanced, magazine-quality, MLS-ready.
+Look target:
+- Natural daylight balance with neutral whites and clean color separation.
+- Bright but realistic interiors: lift shadows gently while keeping black levels anchored.
+- Keep surfaces clean: no watercolor blotches, no artificial texture, no plastic skinning.
+- Preserve fine details (trim, tile grout, cabinetry edges) with restrained sharpening only.
+- Avoid HDR artifacts: no halos, no glowing edges, no over-localized contrast.
 
-Where the ground-truth image already has a window: use the darker exposure references to recover sky, foliage, or scene detail without blowing out highlights. Do not change the window's position, count, or shape.
+Window handling:
+- If a real window opening exists in the base image, recover exterior detail from darker exposures only inside that opening.
+- Protect highlight roll-off around window frames and sheers; avoid clipped white patches.
+- Never invent openings or outdoor views where none exist.
 
-Where the ground truth has no window on a wall: keep that wall solid. Do not add a window, glass, or fake exterior view for drama."""
+Output should feel editorial and MLS-ready: crisp, natural, and believable."""
 
         if retry_count > 0:
             prompt += "\n\nRetry: The previous output failed structural validation. Match the first (fused) image's architecture exactly. Do not invent or move openings."
