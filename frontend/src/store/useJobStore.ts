@@ -30,6 +30,7 @@ interface StyleProfile {
   name: string;
   url?: string;
   createdAt: number;
+  blobPath?: string;
 }
 
 interface JobStore {
@@ -53,6 +54,21 @@ interface JobStore {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+const normalizeProfileUrl = (value?: string): string | undefined => {
+  if (!value || typeof value !== 'string') return undefined;
+  try {
+    return new URL(value, API_URL).toString();
+  } catch {
+    return undefined;
+  }
+};
+
+const extractProfileName = (blobPath?: string): string => {
+  if (!blobPath || typeof blobPath !== 'string') return 'Style Profile';
+  const filename = blobPath.split('/').pop() || blobPath;
+  return filename.replace(/^[a-f0-9]{8}_/, '');
+};
+
 export const useJobStore = create<JobStore>((set, get) => ({
   jobs: {},
   activeSessionId: null,
@@ -74,9 +90,10 @@ export const useJobStore = create<JobStore>((set, get) => ({
         const data = await res.json();
         const profiles = (data.profiles || []).map((p: any) => ({
           id: p.id,
-          name: p.blob_path.split('_').pop() || 'Style Profile',
-          url: p.url,
-          createdAt: p.created_at
+          name: extractProfileName(p.blob_path),
+          url: normalizeProfileUrl(p.url),
+          createdAt: Number(p.created_at) || Date.now(),
+          blobPath: p.blob_path,
         }));
         set({ styleProfiles: profiles });
       }

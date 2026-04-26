@@ -570,8 +570,8 @@ export default function UploadFlow() {
             <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center border border-white/20 shadow-2xl shadow-white/5">
               <UploadCloud className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-3xl font-medium text-white tracking-tight">Drop folders to import</h2>
-            <p className="text-white/60 font-medium">RAW processing is currently not supported. Please drop JPEGs, TIFFs, or HEIC files.</p>
+            <h2 className="text-3xl font-medium text-white tracking-tight">{t('import_exposures')}</h2>
+            <p className="text-white/60 font-medium">{t('supports_formats')}</p>
           </div>
         </div>
       )}
@@ -587,8 +587,8 @@ export default function UploadFlow() {
       {/* QUOTA HEADER */}
       {(flowState === 'IDLE' || flowState === 'CONFIRMATION') && quota && (
         <div className="mb-8 px-5 py-2 bg-surface border border-border shadow-sm rounded-full text-xs font-medium flex items-center gap-3 text-muted tracking-wide uppercase">
-            <span>Monthly Allotment</span>
-            <span className="text-foreground bg-foreground/5 px-2 py-0.5 rounded">{quota.used} / {quota.limit} Scenes</span>
+            <span>{t('properties_detected')}</span>
+            <span className="text-foreground bg-foreground/5 px-2 py-0.5 rounded">{quota.used} / {quota.limit} {t('final_compositions')}</span>
         </div>
       )}
 
@@ -600,9 +600,9 @@ export default function UploadFlow() {
             <div className="absolute inset-0 bg-gradient-to-b from-foreground/[0.02] to-transparent pointer-events-none" />
             
             <UploadCloud className="w-12 h-12 text-muted mb-4 sm:mb-6 group-hover:text-foreground/80 transition-colors duration-500" />
-            <h2 className="text-2xl md:text-3xl font-medium tracking-tight mb-2 sm:mb-3 text-foreground">Import bracketed sets</h2>
+            <h2 className="text-2xl md:text-3xl font-medium tracking-tight mb-2 sm:mb-3 text-foreground">{t('import_exposures')}</h2>
             <p className="text-muted text-sm md:text-base mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed">
-              Select multiple photos from your camera roll or drop folders here. We support JPEG, HEIC, TIFF, and PNG.
+              {t('drop_brackets')}
             </p>
             
             <div className="relative z-10 w-full sm:w-auto">
@@ -618,13 +618,13 @@ export default function UploadFlow() {
                 htmlFor="file-upload" 
                 className="px-8 py-3.5 bg-foreground text-background hover:opacity-90 transition-all rounded-full font-semibold cursor-pointer text-sm shadow-sm active:scale-95 flex items-center justify-center min-h-[44px] w-full sm:w-auto"
               >
-                Select Photos
+                {t('browse_files')}
               </label>
             </div>
           </div>
           
           <div className="mt-16 w-full max-w-md pt-8 border-t border-border flex flex-col items-center gap-4 relative z-10">
-            <h3 className="text-sm font-medium text-foreground">Room Code</h3>
+            <h3 className="text-sm font-medium text-foreground">{t('session_id')}</h3>
                 <div className="flex w-full max-w-[400px] gap-2 items-center justify-center">
               <input
                 type="text"
@@ -638,7 +638,7 @@ export default function UploadFlow() {
                     setSessionCodeError("Must be at least 3 characters.");
                   }
                 }}
-                placeholder="Room code"
+                placeholder={t('session_id')}
                 className="flex-1 min-w-0 bg-surface border border-border rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 font-mono text-center"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -654,7 +654,7 @@ export default function UploadFlow() {
                 }}
                 className="px-6 py-2.5 bg-foreground text-background rounded-lg text-sm font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all whitespace-nowrap"
               >
-                Resume
+                {t('resume')}
               </button>
             </div>
             {sessionCodeError && <p className="text-xs text-warning mt-1" data-testid="session-code-error">{sessionCodeError}</p>}
@@ -747,8 +747,8 @@ export default function UploadFlow() {
       {flowState === 'PARSING' && (
         <div className="flex flex-col items-center justify-center py-24 animate-in fade-in">
            <Loader2 className="w-8 h-8 text-muted animate-spin mb-6" />
-           <h2 className="text-xl font-medium tracking-tight mb-2 text-foreground">Analyzing EXIF Data</h2>
-           <p className="text-muted text-sm">Organizing {uploadedFiles.length} files into structural groups...</p>
+           <h2 className="text-xl font-medium tracking-tight mb-2 text-foreground">{t('status_aligning')}</h2>
+           <p className="text-muted text-sm">{t('processing')} {uploadedFiles.length}…</p>
         </div>
       )}
 
@@ -757,17 +757,17 @@ export default function UploadFlow() {
         <div className="w-full max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
            <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6 border-b border-border pb-6">
               <div>
-                 <h2 className="text-3xl font-medium tracking-tight text-foreground mb-2">Ready to Process</h2>
+                 <h2 className="text-3xl font-medium tracking-tight text-foreground mb-2">{t('ready_for_fusion')}</h2>
                  <p className="text-muted">
-                    <strong className="text-foreground">{photoGroups.length} Scenes</strong> detected from {uploadedFiles.length} files.
+                    <strong className="text-foreground">{photoGroups.length}</strong> {t('sequence_identified')} ({uploadedFiles.length})
                  </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                  <button onClick={() => setFlowState('IDLE')} className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-full border border-border hover:bg-muted/5 text-foreground transition-colors text-sm font-medium tracking-wide">
-                    Cancel
+                    {t('cancel')}
                  </button>
                  <button onClick={processUploadBatch} className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-full bg-foreground text-background hover:opacity-90 transition-all font-semibold text-sm shadow-sm active:scale-95">
-                    Generate {photoGroups.length} Final Images
+                    {t('commence_processing')} {photoGroups.length}
                  </button>
               </div>
            </div>
@@ -830,7 +830,7 @@ export default function UploadFlow() {
       {/* STATE: UPLOADING */}
       {flowState === 'UPLOADING' && (
          <div className="w-full max-w-2xl flex flex-col items-center justify-center py-24 animate-in fade-in">
-            <h2 className="text-2xl font-medium tracking-tight mb-8 text-foreground">Uploading Shoot Data</h2>
+            <h2 className="text-2xl font-medium tracking-tight mb-8 text-foreground">{t('crafting_imagery')}</h2>
             
             <div className="w-full bg-surface border border-border h-3 rounded-full overflow-hidden mb-4 shadow-inner">
                <div 
@@ -840,7 +840,7 @@ export default function UploadFlow() {
             </div>
             
             <div className="flex justify-between w-full text-sm font-medium">
-               <span className="text-muted">Chunking & Transferring...</span>
+               <span className="text-muted">{t('processing')}...</span>
                <span className="text-foreground font-mono">{uploadProgress.completed} / {uploadProgress.total}</span>
             </div>
             

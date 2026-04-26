@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useJobStore } from '@/store/useJobStore';
+import { ImageOff } from 'lucide-react';
 
 export const AgencySettings: React.FC = () => {
   const { styleProfiles, uploadStyleProfile, uploadTrainingPair, fetchStyleProfiles, deleteStyleProfile } = useJobStore();
@@ -7,6 +8,8 @@ export const AgencySettings: React.FC = () => {
   const [isUploadingStyle, setIsUploadingStyle] = useState(false);
   const [isUploadingTraining, setIsUploadingTraining] = useState(false);
   const [isDeletingStyle, setIsDeletingStyle] = useState<string | null>(null);
+  const [failedThumbIds, setFailedThumbIds] = useState<Record<string, true>>({});
+  const [retriedThumbIds, setRetriedThumbIds] = useState<Record<string, true>>({});
   
   const styleInputRef = useRef<HTMLInputElement>(null);
   
@@ -17,6 +20,16 @@ export const AgencySettings: React.FC = () => {
   // For training pairs
   const [trainingBrackets, setTrainingBrackets] = useState<File[]>([]);
   const [trainingFinalEdit, setTrainingFinalEdit] = useState<File | null>(null);
+
+  const handleThumbError = async (profileId: string) => {
+    if (retriedThumbIds[profileId]) {
+      setFailedThumbIds((prev) => ({ ...prev, [profileId]: true }));
+      return;
+    }
+
+    setRetriedThumbIds((prev) => ({ ...prev, [profileId]: true }));
+    await fetchStyleProfiles();
+  };
 
   const handleStyleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -54,9 +67,24 @@ export const AgencySettings: React.FC = () => {
           <ul className="space-y-2 mb-4">
             {styleProfiles.map(profile => (
               <li key={profile.id} className="flex items-center justify-between p-3 bg-background rounded-md text-sm border border-border/50 group">
-                <div className="flex items-center gap-3">
-                  {profile.url && <img src={profile.url} alt="style" className="w-8 h-8 rounded object-cover" />}
-                  <span className="font-medium text-foreground">{profile.name}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 shrink-0 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
+                    {profile.url && !failedThumbIds[profile.id] ? (
+                      <img
+                        src={profile.url}
+                        alt={`${profile.name} style profile preview`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        onError={() => {
+                          void handleThumbError(profile.id);
+                        }}
+                      />
+                    ) : (
+                      <ImageOff className="w-4 h-4 text-muted" aria-hidden="true" />
+                    )}
+                  </div>
+                  <span className="font-medium text-foreground truncate">{profile.name}</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-xs text-muted">
@@ -69,7 +97,7 @@ export const AgencySettings: React.FC = () => {
                       setIsDeletingStyle(null);
                     }}
                     disabled={isDeletingStyle === profile.id}
-                    className="text-xs text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                    className="text-xs text-red-500/80 hover:text-red-600 opacity-70 group-hover:opacity-100 focus:opacity-100 transition-opacity disabled:opacity-50"
                   >
                     {isDeletingStyle === profile.id ? 'Deleting...' : 'Delete'}
                   </button>

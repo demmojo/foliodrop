@@ -97,7 +97,7 @@ describe('UploadFlow Component', () => {
     await act(async () => {
       render(<UploadFlow />);
     });
-    expect(screen.getByText('Import bracketed sets')).toBeInTheDocument();
+    expect(screen.getByText('Add Listing Photos')).toBeInTheDocument();
   });
 
   it('handles file selection and transitions to confirmation', async () => {
@@ -114,7 +114,7 @@ describe('UploadFlow Component', () => {
     
     // Should transition to confirmation
     await waitFor(() => {
-      expect(screen.getByText('Ready to Process')).toBeInTheDocument();
+      expect(screen.getByText('Ready to Enhance')).toBeInTheDocument();
     });
     
     // Shows the parsed scene
@@ -139,7 +139,7 @@ describe('UploadFlow Component', () => {
     });
     
     // Stays in IDLE
-    expect(screen.getByText('Import bracketed sets')).toBeInTheDocument();
+    expect(screen.getByText('Add Listing Photos')).toBeInTheDocument();
   });
 
   it('handles full flow: idle -> parsing -> confirmation -> uploading -> processing -> review', async () => {
@@ -164,7 +164,7 @@ describe('UploadFlow Component', () => {
     
     // 2. Wait for confirmation
     await waitFor(() => {
-      expect(screen.getByText('Ready to Process')).toBeInTheDocument();
+      expect(screen.getByText('Ready to Enhance')).toBeInTheDocument();
     });
     
     // Setup API mocks for upload and finalize
@@ -191,7 +191,7 @@ describe('UploadFlow Component', () => {
     });
 
     // 3. Click "Generate"
-    const generateBtn = screen.getByText(/Generate 1 Final Images/i);
+    const generateBtn = screen.getByText(/Enhance Photos 1/i);
     await act(async () => {
       fireEvent.click(generateBtn);
       // Wait for promises
@@ -276,11 +276,11 @@ describe('UploadFlow Component', () => {
     
     // 2. Wait for confirmation
     await waitFor(() => {
-      expect(screen.getByText('Ready to Process')).toBeInTheDocument();
+      expect(screen.getByText('Ready to Enhance')).toBeInTheDocument();
     });
 
     // 3. Click "Generate"
-    const generateBtn = screen.getByText(/Generate 1 Final Images/i);
+    const generateBtn = screen.getByText(/Enhance Photos 1/i);
     await act(async () => {
       fireEvent.click(generateBtn);
       // Wait for promises
@@ -356,7 +356,7 @@ describe('UploadFlow Component', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Ready to Process')).toBeInTheDocument();
+      expect(screen.getByText('Ready to Enhance')).toBeInTheDocument();
     });
 
     // Verify the EV rendering which is also partially uncovered
@@ -568,10 +568,10 @@ describe('UploadFlow Component', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Ready to Process')).toBeInTheDocument();
+      expect(screen.getByText('Ready to Enhance')).toBeInTheDocument();
     });
 
-    const generateBtn = screen.getByText(/Generate 1 Final Images/i);
+    const generateBtn = screen.getByText(/Enhance Photos 1/i);
     await act(async () => {
       fireEvent.click(generateBtn);
       await new Promise(r => setTimeout(r, 0));

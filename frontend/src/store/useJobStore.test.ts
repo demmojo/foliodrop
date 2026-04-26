@@ -93,7 +93,7 @@ describe('useJobStore', () => {
       
       const state = useJobStore.getState();
       expect(state.styleProfiles).toHaveLength(1);
-      expect(state.styleProfiles[0].name).toBe('test.jpg');
+      expect(state.styleProfiles[0].name).toBe('123_test.jpg');
       expect(state.styleProfiles[0].url).toBe('blob:url');
     });
 
