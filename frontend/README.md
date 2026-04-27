@@ -5,10 +5,10 @@ Folio is an intelligent HDR processing pipeline tailored for real estate photogr
 ## Features
 
 - **Intelligent Ingestion**: Zero-friction drag-and-drop import for bracketed sets, backed by on-device EXIF parsing and scene grouping.
-- **Agency Profiles**: Secure Firebase Auth login for managing custom style training pairs and specific editing preferences per agency.
+- **Agency Profiles**: Auth-scoped agency profiles and training pairs in production; local/dev mode supports fallback agency IDs for offline workflows.
 - **Hybrid Processing Engine**: Combines deterministic OpenCV-based exposure fusion with generative AI polish for perfect window pulls and lighting balance.
 - **Strict Quality Assurance**: Mathematically protects against AI hallucinations by detecting structural drift using SIFT keypoints.
-- **Instant Delivery**: Real-time progress updates and direct-to-device native sharing or ZIP downloads without waiting for slow server archiving.
+- **Instant Delivery**: Polling-based progress updates and direct-to-device native sharing or ZIP downloads without waiting for server-side packaging.
 
 ## Architecture & Documentation
 
@@ -18,8 +18,7 @@ To understand the core processing flow and architectural philosophy, see our det
 
 ## Testing & Reliability
 
-Folio maintains a high bar for reliability and deterministic fallback:
-- **100% Test Coverage**: The entire pipeline—both the FastAPI backend and Next.js frontend—maintains full test coverage to protect critical image processing paths.
+Folio maintains a high bar for reliability and deterministic fallback with extensive automated tests across backend and frontend critical paths.
 
 ## Getting Started
 

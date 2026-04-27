@@ -664,7 +664,7 @@ export default function UploadFlow() {
             </div>
             {sessionCodeError && <p className="text-xs text-warning mt-1" data-testid="session-code-error">{sessionCodeError}</p>}
             <p className="text-[11px] text-muted text-center max-w-[300px] mt-1">
-              Start an upload with this code, or enter an existing one to resume. Codes expire in 30 days.
+              Start an upload with this code, or enter an existing one to resume. Session retention depends on backend policy.
             </p>
 
             <button

@@ -190,7 +190,7 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
 
       {sessionId && (
         <div className="mt-8 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Session Code (Valid for 30 days)</p>
+           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Session Code (Retention Policy Applies)</p>
            <div className="flex items-center gap-2 bg-surface border border-border pl-4 pr-1 py-1 rounded-full shadow-sm">
              <code className="text-sm font-mono text-foreground font-medium select-all">{sessionId}</code>
              <button

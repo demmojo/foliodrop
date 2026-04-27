@@ -20,6 +20,8 @@ todos:
 isProject: true
 ---
 
+> **Historical Plan (Superseded):** This document captures an earlier architecture direction and contains constraints that are no longer current (for example, the strict prohibition on generative refinement). Refer to `docs/ARCHITECTURE.md`, `docs/how-folio-works.md`, and backend runtime code for the current implementation.
+
 # Zero-Click Hybrid Pipeline with VLM QA
 
 ## 1. Product & Architecture Thesis

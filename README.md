@@ -11,7 +11,7 @@ Next-Gen luxury serverless HDR platform for real estate agents and professional 
 *   **Dark Mode**: Seamless light and dark mode toggling, respecting system preferences and eliminating eye strain in dark editing rooms.
 *   **Client-Side ZIP Export**: Package all your fused deliverables directly in the browser and download them instantly.
 *   **Secure 48-Hour Sessions**: Workspaces are tied to a unique session ID. Files are safely auto-deleted after 48 hours to protect client privacy.
-*   **Advanced AI Backend**: Utilizing OpenCV, ONNX models, and Python-based computer vision for Semantic Window Masking, Exposure Fusion (Mertens), and AI Denoising & Color Grading.
+*   **Hybrid CV + Generative Backend**: OpenCV-based deterministic fusion and alignment, with optional generative refinement guarded by structural QA and safe fallback.
 
 ## Architecture
 
@@ -21,14 +21,14 @@ Folio is built on a highly scalable, local-cloud-hybrid architecture deployed to
 - **Framework**: Next.js 16 (App Router)
 - **Styling**: Tailwind CSS 4
 - **State Management**: Zustand
-- **Uploads**: Direct-to-GCS uploads with chunking via Pre-Signed URLs
+- **Uploads**: Direct-to-GCS signed URL `PUT` uploads with client-side concurrency limits
 - **Key Components**: `UploadFlow`, `ReviewGrid`, `BeforeAfterSlider`, `ProcessingConsole`
 
 ### Backend (FastAPI)
 - **Framework**: FastAPI (Python 3.x)
 - **Computer Vision**: OpenCV, scikit-image, numpy
-- **AI Models**: ONNX (for denoising/masking)
-- **Event Bus**: Redis Pub/Sub 
+- **AI Models**: OpenCV pipeline with optional Gemini-based refinement and deterministic QA fallback
+- **Progress Contract**: Frontend batch-status polling APIs (with backend event abstractions)
 - **Architecture Pattern**: Hexagonal Architecture (Ports & Adapters)
 
 ### Infrastructure (GCP)
@@ -45,7 +45,7 @@ Folio is built on a highly scalable, local-cloud-hybrid architecture deployed to
 Folio operates in a high-compute, data-heavy domain. Operating this at scale requires strict adherence to the following architectural constraints and business realities:
 
 ### 1. Compute Economics & Abuse Prevention
-HDR fusion (OpenCV/ONNX) is exceptionally CPU and RAM intensive. **This repository currently provides unauthenticated access to heavy GPU/CPU workloads.** 
+HDR fusion and refinement are CPU/RAM intensive. **Production deployments must enforce strict authentication and request limits.**
 *   **Risk**: A malicious actor or sudden viral traffic can trigger massive Cloud Run scaling, exhausting GCP billing credits.
 *   **Mitigation**: Before launching to production, you **must** implement authentication (e.g., Firebase Auth/Clerk), enforce strict payload limits on GCS pre-signed URLs, and introduce Stripe billing tiers to offset compute costs.
 
@@ -55,14 +55,14 @@ Fusing 7-bracket, 42-megapixel RAW/JPEG images requires significant RAM. If a Cl
 *   **Mitigation**: Cloud Run memory limits must be heavily provisioned (e.g., 4GB+ per instance). Cloud Tasks queues must be explicitly configured with `max_retry_duration` and dead-letter queues.
 
 ### 3. Session Security & Data Privacy
-While sessions use unguessable UUIDs and auto-delete after 48 hours, they rely on *security through obscurity*. 
+Session/room codes are human-readable for workflow continuity, so they should be treated like shareable access tokens rather than secrets.
 *   **Risk**: Real estate photos are often under strict pre-listing embargo. If a session URL leaks, unauthorized users can view the deliverables.
 *   **Mitigation**: Production deployments should upgrade from anonymous UUID sessions to authenticated user-tenant workspaces.
 
-### 4. Serverless State & WebSockets (Redis Requirement)
-The backend uses Server-Sent Events (SSE) to stream job progress to the UI.
-*   **Risk**: Cloud Run scales horizontally. The "in-memory fallback" for the Event Bus is strictly for local development. In production, if a webhook hits Instance A while the user is listening on Instance B, the progress bar will permanently stall without a distributed message broker.
-*   **Mitigation**: You **must** deploy GCP MemoryStore (Redis) and attach a Serverless VPC Access Connector to your Cloud Run instances to ensure cross-container Pub/Sub delivery. Alternatively, refactor the frontend to listen directly to Firestore document snapshots (`onSnapshot`), eliminating the need for Redis entirely.
+### 4. Serverless State & Progress Delivery
+The current UI tracks progress via periodic polling (`/api/v1/jobs/batch-status`).
+*   **Risk**: Excessive polling intervals can increase API load or make progress feel stale.
+*   **Mitigation**: Keep polling cadence adaptive, and monitor API latency/error budgets in production.
 
 ---
 

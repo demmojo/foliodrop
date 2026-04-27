@@ -48,7 +48,7 @@ export default function HowItWorksPage() {
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <li className="bg-surface border border-border p-5 rounded-lg flex flex-col gap-2">
               <strong className="text-foreground">Zero-Friction Import</strong>
-              <span className="text-sm text-muted">Full-viewport dropzone accepting JPEGs, TIFFs, and HEICs with immediate local file validation.</span>
+              <span className="text-sm text-muted">Full-viewport dropzone accepting JPEG, PNG, TIFF, HEIC, and HEIF files with immediate local validation.</span>
             </li>
             <li className="bg-surface border border-border p-5 rounded-lg flex flex-col gap-2">
               <strong className="text-foreground">On-Device EXIF Parsing</strong>
@@ -80,7 +80,7 @@ export default function HowItWorksPage() {
             <div className="flex-1 bg-surface border border-border p-6 rounded-lg flex flex-col gap-3">
               <FileLock2 className="w-6 h-6 text-foreground" />
               <strong className="text-lg">Ephemeral Privacy & Agency Settings</strong>
-              <p className="text-sm text-muted leading-relaxed">All data is tied to secure, 48-hour ephemeral sessions identified by unguessable Room Codes. Agency style profiles and quotas are securely isolated via Firebase Auth.</p>
+              <p className="text-sm text-muted leading-relaxed">Session codes are designed for workflow continuity and resuming jobs later; treat them like shareable access tokens and avoid posting them publicly. In production, agency isolation is auth-scoped; local/dev mode supports fallback agency IDs for offline workflows.</p>
             </div>
           </div>
         </section>

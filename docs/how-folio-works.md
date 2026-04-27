@@ -9,7 +9,7 @@
 
 ## 2. Stage 1: Intelligent Ingestion (Local Processing)
 
-- **Zero-Friction Import:** Full-viewport dropzone accepting JPEGs, TIFFs, and HEICs with immediate local file validation.
+- **Zero-Friction Import:** Full-viewport dropzone accepting JPEG, PNG, TIFF, HEIC, and HEIF files with immediate local validation.
 - **On-Device EXIF Parsing:** Before any data leaves the device, the browser securely extracts capture time, exposure compensation (EV), aperture (f-stop), and ISO.
 - **Time-Based Scene Grouping:** The algorithm groups continuous rapid-fire shots into scenes based on microsecond time gaps and exposure metadata.
 - **Visual AI Fallback:** If images lack EXIF data, the client generates lightweight thumbnails to visually cluster photos by room angle and composition without blocking the upload pipeline.
@@ -17,8 +17,8 @@
 ## 3. Stage 2: Direct-to-Cloud Secure Transfer
 
 - **Accelerated Transfer:** To ensure maximum speed, the frontend requests secure signed URLs and uploads original brackets directly to the cloud storage layer.
-- **Ephemeral Privacy:** All data is tied to secure, 48-hour ephemeral sessions identified by unguessable Room Codes.
-- **Agency Settings & Style Isolation:** The system provides Agency Login, securely isolating individual agency style profiles, specific editing preferences, and dedicated quotas using Firebase Auth.
+- **Session Codes for Continuity:** Data is scoped to session/room codes so teams can resume work later. Treat session codes like shareable access tokens and avoid posting them publicly.
+- **Agency Settings & Style Isolation:** In production, agency isolation is enforced through auth-scoped requests. In local/dev mode, fallback agency IDs are supported for offline workflows.
 
 ## 4. Stage 3: The Hybrid Engine (OpenCV + AI Polish)
 
@@ -43,4 +43,4 @@
 
 ## 6. Testing & Reliability
 
-Folio relies on extreme deterministic reliability, backed by 100% test coverage across both the frontend React/Zustand client and the backend Python/FastAPI pipeline. We mock external APIs, including storage buckets and Gemini Vision endpoints, to ensure robust behavior across edge cases—from processing massive files during server memory constraints to executing graceful fallbacks when the AI hallucination threshold is triggered.
+Folio relies on deterministic fallback behavior and extensive automated tests across the React/Zustand frontend and Python/FastAPI backend. External services (storage and model calls) are mocked in test suites to validate edge cases such as memory pressure, retries, and structural-QA fallback behavior.
