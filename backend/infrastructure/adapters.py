@@ -40,7 +40,7 @@ class FirestoreAdapter(IDatabase):
         docs = self.db.collection("sessions").document(session_id).collection("results").stream()
         return [doc.to_dict() for doc in docs]
 
-    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: Optional[dict] = None, error: Optional[str] = None):
+    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: Optional[dict] = None, error: Optional[str] = None, agency_id: Optional[str] = None):
         job_data = {
             "id": job_id,
             "session_id": session_id,
@@ -48,6 +48,8 @@ class FirestoreAdapter(IDatabase):
             "idempotency_key": idempotency_key,
             "updated_at": firestore.SERVER_TIMESTAMP
         }
+        if agency_id is not None:
+            job_data["agency_id"] = agency_id
         if result is not None:
             job_data["result"] = result
         if error is not None:
@@ -83,6 +85,21 @@ class FirestoreAdapter(IDatabase):
             results.extend([doc.to_dict() for doc in docs])
         return results
 
+    def is_blob_path_owned_by_agency(self, blob_path: str, agency_id: str) -> bool:
+        # Explicit agency-scoped prefixes are safe to sign for the owner.
+        if blob_path.startswith(f"style_profiles/{agency_id}/") or blob_path.startswith(f"training_pairs/{agency_id}/"):
+            return True
+
+        # Job outputs are stored by session path. Resolve ownership via job.result fields.
+        for field in ("result.blob_path", "result.thumb_blob_path", "result.original_blob_path"):
+            docs = self.db.collection("jobs").where(field, "==", blob_path).limit(1).stream()
+            for doc in docs:
+                job = doc.to_dict() or {}
+                job_agency = job.get("agency_id") or (job.get("result") or {}).get("agency_id")
+                if job_agency == agency_id:
+                    return True
+        return False
+
     def get_cached_group(self, group_hash: str) -> Optional[dict]:
         doc = self.db.collection("group_cache").document(group_hash).get()
         if doc.exists:
@@ -104,25 +121,35 @@ class FirestoreAdapter(IDatabase):
 
     def increment_quota_usage(self, agency_id: str, amount: float) -> bool:
         doc_ref = self.db.collection("quotas").document(agency_id)
-        doc = doc_ref.get()
-        if doc.exists:
-            data = doc.to_dict()
-            limit = data.get("limit", 50.0)
-            used = data.get("used", 0.0)
-            
-            # Auto-migrate legacy generation-based quotas
-            if limit == 3000:
-                limit = 50.0
-                used = 0.0
 
-            if used + amount > limit:
-                return False
-            doc_ref.update({"used": used + amount, "limit": limit})
-        else:
+        # Use a transaction so concurrent finalize-job calls cannot both observe the
+        # same `used` value and double-charge past the limit.
+        transaction = self.db.transaction()
+
+        @firestore.transactional
+        def _txn(txn) -> bool:
+            snapshot = doc_ref.get(transaction=txn)
+            if snapshot.exists:
+                data = snapshot.to_dict() or {}
+                limit = data.get("limit", 50.0)
+                used = data.get("used", 0.0)
+
+                # Auto-migrate legacy generation-based quotas
+                if limit == 3000:
+                    limit = 50.0
+                    used = 0.0
+
+                if used + amount > limit:
+                    return False
+                txn.update(doc_ref, {"used": used + amount, "limit": limit})
+                return True
+
             if amount > 50.0:
                 return False
-            doc_ref.set({"used": amount, "limit": 50.0})
-        return True
+            txn.set(doc_ref, {"used": amount, "limit": 50.0})
+            return True
+
+        return _txn(transaction)
 
     def save_style_image(self, agency_id: str, blob_path: str) -> List[str]:
         import datetime
@@ -278,12 +305,21 @@ class GCSBlobStorageAdapter(IBlobStorage):
 
     def download_blobs(self, session_id: str, filenames: List[str]) -> List[bytes]:
         bucket = self.client.bucket(self.bucket_name)
-        data = []
-        for filename in filenames:
+
+        def _fetch(filename: str) -> bytes:
             blob_name = f"{session_id}/{filename}"
-            blob = bucket.blob(blob_name)
-            data.append(blob.download_as_bytes())
-        return data
+            return bucket.blob(blob_name).download_as_bytes()
+
+        # Bracketed scenes are typically 3-7 large JPEGs; serial GCS GETs add
+        # ~hundreds of ms each. Fetch them concurrently while preserving order.
+        from concurrent.futures import ThreadPoolExecutor
+
+        if not filenames:
+            return []
+
+        max_workers = min(len(filenames), 8)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            return list(pool.map(_fetch, filenames))
 
     def upload_blob(self, session_id: str, filename: str, data: bytes, content_type: str) -> str:
         bucket = self.client.bucket(self.bucket_name)
@@ -353,20 +389,6 @@ class CloudTasksAdapter(ITaskQueue):
         self.region = region
         self.queue_name = queue_name
         self.queue_path = self.client.queue_path(project_id, region, queue_name)
-
-    def enqueue_room_processing(self, session_id: str, room: str, photos: List[str]) -> None:
-        import json
-        body_dict = {"session_id": session_id, "room": room, "photos": photos}
-        
-        task = {
-            "http_request": {
-                "http_method": tasks_v2.HttpMethod.POST,
-                "url": f"https://{self.region}-{self.project_id}.run.app/api/process-room",
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps(body_dict).encode(),
-            }
-        }
-        # self.client.create_task(request={"parent": self.queue_path, "task": task})
 
     def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str], agency_id: str = "default") -> None:
         import json

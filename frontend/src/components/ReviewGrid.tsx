@@ -11,9 +11,10 @@ interface ReviewGridProps {
   onDiscardItem?: (id: string) => void;
   onKeepItem?: (id: string) => void;
   onOverrideWithManualEdit?: (id: string, file: File) => void;
+  onStartNewSession?: () => void;
 }
 
-export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem, onOverrideWithManualEdit }: ReviewGridProps) {
+export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem, onOverrideWithManualEdit, onStartNewSession }: ReviewGridProps) {
   const [loupeImage, setLoupeImage] = useState<ProcessedHDR | null>(null);
 
   const reviewQueue = photos?.filter(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED') || [];
@@ -132,12 +133,23 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                 <h2 className="text-2xl font-light text-foreground tracking-tight">Ready for Export</h2>
                 <p className="text-sm text-muted mt-1">{cargoGrid.length} images processed successfully.</p>
             </div>
-            <button 
-              onClick={onConfirm}
-              className="bg-foreground text-background px-6 py-3 sm:py-2 rounded-full sm:rounded font-medium text-sm hover:opacity-90 transition-opacity uppercase tracking-wider w-full sm:w-auto shadow-sm"
-            >
-              Export Batch
-            </button>
+            <div className="flex gap-3 w-full sm:w-auto">
+              {onStartNewSession && (
+                <button 
+                  onClick={onStartNewSession}
+                  className="bg-surface text-foreground border border-border px-6 py-3 sm:py-2 rounded-full sm:rounded font-medium text-sm hover:bg-muted/5 transition-colors uppercase tracking-wider flex-1 sm:flex-none shadow-sm"
+                >
+                  Start New
+                </button>
+              )}
+              <button 
+                onClick={onConfirm}
+                className="bg-foreground text-background px-6 py-3 sm:py-2 rounded-full sm:rounded font-medium text-sm hover:opacity-90 transition-opacity uppercase tracking-wider flex-1 sm:flex-none shadow-sm"
+                disabled={cargoGrid.length === 0}
+              >
+                Export Batch
+              </button>
+            </div>
          </div>
 
          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -163,6 +175,19 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
          {cargoGrid.length === 0 && reviewQueue.length > 0 && (
              <div data-testid="review-all-msg" className="w-full h-48 md:h-64 flex items-center justify-center text-center px-4 text-muted border border-dashed border-border rounded-lg">
                  All images require review. Please check the queue.
+             </div>
+         )}
+         {cargoGrid.length === 0 && reviewQueue.length === 0 && (
+             <div data-testid="empty-msg" className="w-full h-48 md:h-64 flex flex-col items-center justify-center text-center px-4 text-muted border border-dashed border-border rounded-lg gap-4">
+                 <p>No images were successfully processed.</p>
+                 {onStartNewSession && (
+                   <button 
+                     onClick={onStartNewSession}
+                     className="bg-surface text-foreground border border-border px-6 py-2 rounded font-medium text-sm hover:bg-muted/5 transition-colors uppercase tracking-wider"
+                   >
+                     Start New Session
+                   </button>
+                 )}
              </div>
          )}
       </div>

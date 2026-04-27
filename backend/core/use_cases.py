@@ -73,7 +73,7 @@ class FinalizeJobUseCase:
                 return {"status": "quota_exceeded", "message": "Monthly budget limit of $50 reached."}
 
             for group_job_id, group_idemp_key, room_name, filenames in new_jobs:
-                self.db.save_job(group_job_id, session_id, "PENDING", group_idemp_key)
+                self.db.save_job(group_job_id, session_id, "PENDING", group_idemp_key, agency_id=agency_id)
                 self.task_queue.enqueue_job(group_job_id, session_id, room_name, filenames, agency_id)
                 job_ids.append(group_job_id)
             
@@ -355,7 +355,10 @@ class ProcessHdrGroupUseCase:
                 "bracket_paths": [f"{session_id}/{p}" for p in photos], # save bracket paths for training
                 "isFlagged": is_flagged,
                 "vlmReport": report_data,
-                "telemetry": telemetry
+                "telemetry": telemetry,
+                # Tag the result with the agency that owns this job so later mutations
+                # (override/training) can refuse to act on another agency's data.
+                "agency_id": agency_id,
             }
 
             if not is_flagged and status == "COMPLETED":
@@ -428,9 +431,16 @@ class OverrideJobImageUseCase:
         job = self.db.get_job(job_id)
         if not job:
             return {"status": "error", "message": "Job not found"}
-            
+
         if "result" not in job:
             return {"status": "error", "message": "Job had no result to override"}
+
+        # Refuse to override jobs that belong to a different agency. Older jobs may
+        # not have an agency_id stamped on the result (pre-fix); allow those to
+        # preserve backwards compatibility while preventing fresh cross-agency edits.
+        job_agency = job.get("result", {}).get("agency_id")
+        if job_agency and job_agency != agency_id:
+            return {"status": "error", "message": "Job does not belong to this agency"}
             
         import uuid
         import re

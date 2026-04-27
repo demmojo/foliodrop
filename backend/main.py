@@ -21,13 +21,37 @@ from backend.core.use_cases import (
 )
 
 logger = logging.getLogger(__name__)
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+MAX_TRAINING_BRACKETS = int(os.environ.get("MAX_TRAINING_BRACKETS", "9"))
+MAX_IMAGE_DIMENSION = int(os.environ.get("MAX_IMAGE_DIMENSION", "12000"))
+
+
+def _is_production_env() -> bool:
+    env = (os.environ.get("APP_ENV") or os.environ.get("ENV") or "").lower()
+    return env in {"prod", "production"}
+
+
+def _validate_production_security_config() -> None:
+    if _is_production_env() and not os.environ.get("EXPECTED_TASK_INVOKER"):
+        raise RuntimeError("EXPECTED_TASK_INVOKER must be set in production")
 
 app = FastAPI(title="Real Estate HDR Backend")
+_validate_production_security_config()
+
+# Auth flows pass the Firebase ID token via Authorization header (not cookies),
+# so we do not need credentialed CORS. Allowing wildcard origins with
+# allow_credentials=True is also rejected by browsers, so disable it explicitly.
+_allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "*")
+_allowed_origins = (
+    [o.strip() for o in _allowed_origins_env.split(",") if o.strip()]
+    if _allowed_origins_env != "*"
+    else ["*"]
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allowed_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -143,19 +167,11 @@ def validate_session(req: ValidateSessionRequest, db: IDatabase = Depends(get_da
         return {"valid": False, "message": "Code must be at least 3 letters", "suggested": sugg}
     
     is_avail = db.check_session_code_availability(req.code)
-    
     if not is_avail:
-        # Let's see what happens here, wait, originally the code was:
-        # if db.check_session_code_availability(req.code):
-        #     db.reserve_session_code(req.code)
-        # return {"valid": True}
-        # Wait, if it wasn't available, it STILL returned {"valid": True}!
-        # Oh, if it wasn't available, it means someone else created it, so it's a valid existing code!
-        pass
-        
-    if is_avail:
-        db.reserve_session_code(req.code)
-        
+        sugg = generate_random_code()
+        return {"valid": False, "message": "Code is already in use", "suggested": sugg}
+
+    db.reserve_session_code(req.code)
     return {"valid": True}
 
 @app.post("/api/v1/group-photos")
@@ -252,31 +268,87 @@ def finalize_job(
         
     return result
 
-@app.post("/api/v1/jobs/process")
-async def process_job_task(
-    payload: CloudTaskPayload, 
-    event_publisher: IEventPublisher = Depends(get_event_publisher),
-    task_queue: ITaskQueue = Depends(get_task_queue),
-    storage: IBlobStorage = Depends(get_blob_storage),
-    db: IDatabase = Depends(get_database)
+def verify_cloud_tasks_oidc(request: Request, authorization: Optional[str] = Header(default=None)):
+    """Validate the OIDC token Cloud Tasks attaches to /jobs/process.
+
+    In production we deploy with `--allow-unauthenticated` so the public web app
+    can hit `/api/v1/sessions/generate`, which means the platform layer does NOT
+    enforce auth on `/jobs/process`. We verify the ID token in the application
+    instead. When `EXPECTED_TASK_INVOKER` is unset we skip verification (local
+    dev / tests / Cloud Run with --no-allow-unauthenticated).
+    """
+    expected_invoker = os.environ.get("EXPECTED_TASK_INVOKER")
+    if not expected_invoker and not _is_production_env():
+        return
+    if not expected_invoker:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="EXPECTED_TASK_INVOKER missing")
+
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as ga_requests
+        claims = id_token.verify_oauth2_token(token, ga_requests.Request())
+    except Exception as e:
+        logger.warning("OIDC verification failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid OIDC token") from e
+
+    if claims.get("email") != expected_invoker or not claims.get("email_verified", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Untrusted invoker")
+
+
+async def _run_process_job_task(
+    payload: CloudTaskPayload,
+    event_publisher: IEventPublisher,
+    task_queue: ITaskQueue,
+    storage: IBlobStorage,
+    db: IDatabase,
 ):
+    """Core processing logic. Shared between the HTTP route and local fakes."""
     # Update status to PROCESSING
     job = db.get_job(payload.job_id)
     if job:
         db.save_job(payload.job_id, payload.session_id, "PROCESSING", job["idempotency_key"])
 
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
-    result = await use_case.execute(payload.agency_id, payload.job_id, payload.session_id, payload.room_name, payload.photos)
-    
-    # Note: DB is updated inside the execute method now to handle both COMPLETED and FAILED
-    return result
+    return await use_case.execute(
+        payload.agency_id,
+        payload.job_id,
+        payload.session_id,
+        payload.room_name,
+        payload.photos,
+    )
+
+
+@app.post("/api/v1/jobs/process")
+async def process_job_task(
+    payload: CloudTaskPayload,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    event_publisher: IEventPublisher = Depends(get_event_publisher),
+    task_queue: ITaskQueue = Depends(get_task_queue),
+    storage: IBlobStorage = Depends(get_blob_storage),
+    db: IDatabase = Depends(get_database),
+):
+    verify_cloud_tasks_oidc(request, authorization)
+    return await _run_process_job_task(payload, event_publisher, task_queue, storage, db)
 
 @app.get("/api/v1/jobs/active")
-def get_active_jobs(session_id: str, db: IDatabase = Depends(get_database), storage: IBlobStorage = Depends(get_blob_storage)):
+def get_active_jobs(
+    session_id: str,
+    db: IDatabase = Depends(get_database),
+    storage: IBlobStorage = Depends(get_blob_storage),
+    agency_id: str = Depends(get_current_agency_id),
+):
     jobs = db.get_active_jobs(session_id)
     
     response_jobs = []
     for job in jobs:
+        job_agency = job.get("agency_id") or (job.get("result") or {}).get("agency_id")
+        if job_agency != agency_id:
+            continue
         job_status = {
             "id": job["id"],
             "status": job["status"],
@@ -298,11 +370,19 @@ def get_active_jobs(session_id: str, db: IDatabase = Depends(get_database), stor
     return {"jobs": response_jobs}
 
 @app.post("/api/v1/jobs/batch-status")
-def get_batch_status(req: BatchStatusRequest, db: IDatabase = Depends(get_database), storage: IBlobStorage = Depends(get_blob_storage)):
+def get_batch_status(
+    req: BatchStatusRequest,
+    db: IDatabase = Depends(get_database),
+    storage: IBlobStorage = Depends(get_blob_storage),
+    agency_id: str = Depends(get_current_agency_id),
+):
     jobs = db.get_jobs(req.job_ids)
     
     response_jobs = []
     for job in jobs:
+        job_agency = job.get("agency_id") or (job.get("result") or {}).get("agency_id")
+        if job_agency != agency_id:
+            continue
         job_status = {
             "id": job["id"],
             "status": job["status"],
@@ -328,15 +408,39 @@ def get_batch_status(req: BatchStatusRequest, db: IDatabase = Depends(get_databa
     )
 
 @app.post("/api/v1/jobs/batch-signed-url")
-def batch_signed_url(req: BatchSignedUrlRequest, storage: IBlobStorage = Depends(get_blob_storage)):
+def batch_signed_url(
+    req: BatchSignedUrlRequest,
+    storage: IBlobStorage = Depends(get_blob_storage),
+    db: IDatabase = Depends(get_database),
+    agency_id: str = Depends(get_current_agency_id),
+):
     urls = []
     for path in req.blob_paths:
+        if not db.is_blob_path_owned_by_agency(path, agency_id):
+            continue
         urls.append({
             "path": path,
             "url": storage.generate_signed_url(path)
         })
     return {"urls": urls}
 
+
+def _validate_image_payload(file_name: str, file_data: bytes) -> None:
+    if len(file_data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=f"{file_name} exceeds max upload size")
+
+    try:
+        from backend.core.image_decoding import decode_image
+        img = decode_image(file_data)
+        h, w = img.shape[:2]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{file_name} is not a valid image") from e
+
+    if h > MAX_IMAGE_DIMENSION or w > MAX_IMAGE_DIMENSION:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"{file_name} exceeds max dimensions {MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION}",
+        )
 
 
 @app.get("/api/v1/style/profiles")
@@ -372,6 +476,7 @@ async def upload_style_image(
 ):
     use_case = UploadStyleImageUseCase(storage, db)
     file_data = await file.read()
+    _validate_image_payload(file.filename, file_data)
     result = use_case.execute(agency_id, file.filename, file_data, file.content_type)
     return result
 
@@ -384,13 +489,20 @@ async def upload_training_pair(
     agency_id: str = Depends(get_current_agency_id)
 ):
     use_case = UploadTrainingPairUseCase(storage, db)
+    if len(brackets) > MAX_TRAINING_BRACKETS:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Too many bracket files (max {MAX_TRAINING_BRACKETS})",
+        )
     
     bracket_data = []
     for b in brackets:
         data = await b.read()
+        _validate_image_payload(b.filename, data)
         bracket_data.append((b.filename, data, b.content_type))
         
     final_data = await final_edit.read()
+    _validate_image_payload(final_edit.filename, final_data)
     final_tuple = (final_edit.filename, final_data, final_edit.content_type)
     
     result = use_case.execute(agency_id, bracket_data, final_tuple)
@@ -406,6 +518,7 @@ async def override_job_image(
 ):
     use_case = OverrideJobImageUseCase(storage, db)
     file_data = await file.read()
+    _validate_image_payload(file.filename, file_data)
     final_tuple = (file.filename, file_data, file.content_type)
     result = use_case.execute(agency_id, job_id, final_tuple)
     if result.get("status") == "error":

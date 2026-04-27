@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useJobStore } from './useJobStore';
 
+const { authState } = vi.hoisted(() => ({
+  authState: { currentUser: null as null | { getIdToken: () => Promise<string> } },
+}));
+
+vi.mock('@/lib/firebase', () => ({
+  auth: authState,
+}));
+
 // Central fetch mock (API + optional dev ingest URLs)
 const mockFetch = vi.fn().mockImplementation((url) => {
   return Promise.resolve({
@@ -24,6 +32,8 @@ describe('useJobStore', () => {
     });
     // @ts-ignore
     process.env.NEXT_PUBLIC_API_URL = 'http://localhost:8080';
+    authState.currentUser = null;
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -71,6 +81,7 @@ describe('useJobStore', () => {
     });
 
     it('uploadStyleProfile should succeed', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementation((url) => {
         if (typeof url === 'string' && url.includes('/api/v1/style/profiles')) {
           return Promise.resolve({
@@ -98,6 +109,7 @@ describe('useJobStore', () => {
     });
 
     it('uploadStyleProfile should handle failure', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -109,6 +121,7 @@ describe('useJobStore', () => {
     });
 
     it('uploadTrainingPair should succeed', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: true }));
 
       const brackets = [new File([''], 'b1.jpg')];
@@ -117,6 +130,7 @@ describe('useJobStore', () => {
     });
 
     it('uploadTrainingPair should log error on failure', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -127,6 +141,7 @@ describe('useJobStore', () => {
     });
 
     it('overrideWithManualEdit should succeed', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: true }));
       
       useJobStore.setState({
@@ -149,6 +164,7 @@ describe('useJobStore', () => {
     });
 
     it('overrideWithManualEdit should log if override HTTP returns not ok', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
       useJobStore.setState({
@@ -167,6 +183,7 @@ describe('useJobStore', () => {
     });
 
     it('overrideWithManualEdit should log error if network fails', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce((url) => {
         return Promise.reject(new Error("Network Error"));
       });
@@ -179,6 +196,7 @@ describe('useJobStore', () => {
     });
 
     it('fetchQuota should succeed', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce(() => {
         return Promise.resolve({
           ok: true,
@@ -193,6 +211,7 @@ describe('useJobStore', () => {
     });
 
     it('rehydrateSession should handle errors', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce((url) => {
         return Promise.reject(new Error("Network Error"));
       });
@@ -205,6 +224,7 @@ describe('useJobStore', () => {
     });
 
     it('pollDueJobs should handle errors', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       useJobStore.setState({
         jobs: {
           'job1': { id: 'job1', status: 'PENDING', nextPollAt: 0 }
@@ -223,6 +243,7 @@ describe('useJobStore', () => {
     });
 
     it('pollDueJobs should handle non-ok response', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       useJobStore.setState({
         jobs: {
           'job1': { id: 'job1', status: 'PENDING', nextPollAt: 0 }
@@ -243,6 +264,7 @@ describe('useJobStore', () => {
     });
 
     it('fetchQuota should handle error', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce((url) => {
         return Promise.reject(new Error("Network Error"));
       });
@@ -254,6 +276,7 @@ describe('useJobStore', () => {
       consoleSpy.mockRestore();
     });
     it('rehydrateSession should succeed', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       const now = Date.now();
       vi.spyOn(Date, 'now').mockReturnValue(now);
       
@@ -286,7 +309,56 @@ describe('useJobStore', () => {
       vi.restoreAllMocks();
     });
 
+    it('pollDueJobs should normalize FLAGGED jobs into ProcessedHDR shape', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+
+      useJobStore.setState({
+        jobs: {
+          'job_flag': { id: 'job_flag', status: 'PROCESSING', nextPollAt: now - 100 }
+        }
+      });
+
+      mockFetch.mockImplementation(() => {
+        return Promise.resolve({
+          ok: true,
+          headers: { get: vi.fn() },
+          clone: () => ({ json: () => Promise.resolve({}) }),
+          json: () => Promise.resolve({
+            jobs: [
+              {
+                id: 'job_flag',
+                status: 'FLAGGED',
+                result: {
+                  url: 'flagged-url',
+                  thumb_url: 'flagged-thumb',
+                  original_url: 'flagged-orig',
+                  room: 'Bathroom',
+                  isFlagged: true,
+                  vlmReport: { reason: 'soft fallback' }
+                }
+              }
+            ]
+          })
+        });
+      });
+
+      await useJobStore.getState().pollDueJobs();
+
+      const job = useJobStore.getState().jobs['job_flag'];
+      expect(job.status).toBe('FLAGGED');
+      expect(job.result?.sceneName).toBe('Bathroom');
+      expect(job.result?.url).toBe('flagged-url');
+      expect(job.result?.thumbUrl).toBe('flagged-thumb');
+      expect(job.result?.originalUrl).toBe('flagged-orig');
+      expect(job.result?.isFlagged).toBe(true);
+
+      vi.restoreAllMocks();
+    });
+
     it('pollDueJobs should fetch due jobs and update state', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       const now = Date.now();
       vi.spyOn(Date, 'now').mockReturnValue(now);
       
@@ -331,6 +403,7 @@ describe('useJobStore', () => {
     });
 
     it('fetchStyleProfiles should no-op on non-ok response', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       mockFetch.mockImplementationOnce(() =>
         Promise.resolve({ ok: false, json: () => Promise.resolve({}) })
       );
@@ -339,6 +412,7 @@ describe('useJobStore', () => {
     });
 
     it('fetchStyleProfiles should catch network errors', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockFetch.mockImplementationOnce(() => Promise.reject(new Error('net')));
       await useJobStore.getState().fetchStyleProfiles();
@@ -347,6 +421,7 @@ describe('useJobStore', () => {
     });
 
     it('deleteStyleProfile should remove profile on success', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       useJobStore.setState({
         styleProfiles: [{ id: 'p1', name: 'a', createdAt: 1 }],
       });
@@ -356,12 +431,66 @@ describe('useJobStore', () => {
     });
 
     it('deleteStyleProfile should no-op on failure', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       useJobStore.setState({
         styleProfiles: [{ id: 'p1', name: 'a', createdAt: 1 }],
       });
       mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
       await useJobStore.getState().deleteStyleProfile('p1');
       expect(useJobStore.getState().styleProfiles).toHaveLength(1);
+    });
+
+    it('uses local-only style profiles when unauthenticated', async () => {
+      authState.currentUser = null;
+      const file = new File(['hello'], 'local-style.jpg', { type: 'image/jpeg' });
+
+      await useJobStore.getState().uploadStyleProfile(file);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(useJobStore.getState().styleProfiles[0].isLocal).toBe(true);
+      expect(useJobStore.getState().styleProfiles[0].name).toBe('local-style.jpg');
+
+      // fetch loads from local storage, still no network
+      useJobStore.setState({ styleProfiles: [] });
+      await useJobStore.getState().fetchStyleProfiles();
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(useJobStore.getState().styleProfiles).toHaveLength(1);
+
+      const id = useJobStore.getState().styleProfiles[0].id;
+      await useJobStore.getState().deleteStyleProfile(id);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(useJobStore.getState().styleProfiles).toHaveLength(0);
+    });
+
+    it('scopes unauthenticated session rehydration with anon agency header', async () => {
+      authState.currentUser = null;
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ jobs: [] }),
+        })
+      );
+
+      await useJobStore.getState().rehydrateSession('anon-session');
+
+      const call = mockFetch.mock.calls[0];
+      expect(String(call[0])).toContain('/api/v1/jobs/active?session_id=anon-session');
+      expect(call[1]?.headers?.['x-agency-id']).toMatch(/^anon_/);
+      expect(call[1]?.headers?.Authorization).toBeUndefined();
+    });
+
+    it('scopes unauthenticated training uploads with anon agency header', async () => {
+      authState.currentUser = null;
+      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: true }));
+
+      await useJobStore.getState().uploadTrainingPair(
+        [new File([''], 'b1.jpg')],
+        new File([''], 'final.jpg')
+      );
+
+      const call = mockFetch.mock.calls[0];
+      expect(String(call[0])).toContain('/api/v1/training/upload');
+      expect(call[1]?.headers?.['x-agency-id']).toMatch(/^anon_/);
+      expect(call[1]?.headers?.Authorization).toBeUndefined();
     });
   });
 });

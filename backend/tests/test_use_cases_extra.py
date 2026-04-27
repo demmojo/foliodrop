@@ -176,6 +176,36 @@ async def test_process_hdr_with_real_key_structural_failure_fallback(mock_comput
 @patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"})
 @patch("google.genai.Client")
 @patch("backend.core.generation_loop.generate_hybrid_hdr")
+@patch("backend.core.generation_loop.compute_structural_diff")
+async def test_style_profile_generation_still_enforces_structural_guard(mock_compute_diff, mock_generate, mock_client):
+    event_publisher = FakeEventPublisher()
+    task_queue = FakeTaskQueue()
+    storage = FakeBlobStorage()
+    db = FakeDatabase()
+
+    img = np.zeros((10, 10, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".jpg", img)
+    fake_bytes = encoded.tobytes()
+    storage.download_blobs = lambda s, f: [fake_bytes, fake_bytes]
+
+    # Style profile exists for this agency, but structural gate must still prevent geometry drift.
+    db.save_style_image("agency_style", "style_profiles/agency_style/look.jpg")
+    job_id = "test_job_style_guard"
+    db.save_job(job_id, "session", "PENDING", "key_style_guard")
+
+    mock_generate.return_value = (fake_bytes, {"status": "success"})
+    mock_compute_diff.return_value = (False, 0.01, 0.8)
+
+    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
+    result = await use_case.execute("agency_style", job_id, "session", "Room 1", ["img1.jpg", "img2.jpg"])
+    assert result["status"] == "FLAGGED"
+    assert result["isFlagged"] is True
+
+
+@pytest.mark.asyncio
+@patch.dict(os.environ, {"GEMINI_API_KEY": "real-key"})
+@patch("google.genai.Client")
+@patch("backend.core.generation_loop.generate_hybrid_hdr")
 async def test_process_hdr_with_real_key_exception(mock_generate, mock_client):
     event_publisher = FakeEventPublisher()
     task_queue = FakeTaskQueue()
@@ -246,6 +276,23 @@ def test_override_job_image_no_result():
     db.save_job("job_2", "session", "COMPLETED", "key")
     res = use_case.execute("agency", "job_2", ("file.jpg", b"data", "image/jpeg"))
     assert res["status"] == "error"
+
+
+def test_override_job_image_rejects_other_agency():
+    storage = FakeBlobStorage()
+    db = FakeDatabase()
+    use_case = OverrideJobImageUseCase(storage, db)
+    # Job stamped as belonging to "other_agency" must not be editable by "intruder".
+    db.save_job(
+        "job_other",
+        "session",
+        "COMPLETED",
+        "key",
+        result={"blob_path": "a", "agency_id": "other_agency"},
+    )
+    res = use_case.execute("intruder", "job_other", ("file.jpg", b"data", "image/jpeg"))
+    assert res["status"] == "error"
+    assert "agency" in res["message"]
 
 def test_override_job_image_success_thumb():
     storage = FakeBlobStorage()

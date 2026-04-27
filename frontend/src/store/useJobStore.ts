@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getLocalAnonAgencyId, getScopedAuthHeaders } from '@/lib/requestHeaders';
 
 export interface ProcessedHDR {
   id: string;
@@ -31,6 +32,7 @@ interface StyleProfile {
   url?: string;
   createdAt: number;
   blobPath?: string;
+  isLocal?: boolean;
 }
 
 interface JobStore {
@@ -53,6 +55,7 @@ interface JobStore {
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const LOCAL_STYLE_PROFILE_KEY_PREFIX = 'folio_local_style_profiles_v1';
 
 const normalizeProfileUrl = (value?: string): string | undefined => {
   if (!value || typeof value !== 'string') return undefined;
@@ -69,6 +72,53 @@ const extractProfileName = (blobPath?: string): string => {
   return filename.replace(/^[a-f0-9]{8}_/, '');
 };
 
+const getLocalAnonId = (): string => {
+  return getLocalAnonAgencyId();
+};
+
+const getLocalStyleProfileStorageKey = (): string => {
+  return `${LOCAL_STYLE_PROFILE_KEY_PREFIX}:${getLocalAnonId()}`;
+};
+
+const readLocalStyleProfiles = (): StyleProfile[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(getLocalStyleProfileStorageKey());
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((p) => p && typeof p.id === 'string').map((p) => ({
+      id: p.id,
+      name: p.name || 'Style Profile',
+      url: p.url,
+      createdAt: Number(p.createdAt) || Date.now(),
+      isLocal: true,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalStyleProfiles = (profiles: StyleProfile[]): void => {
+  if (typeof window === 'undefined') return;
+  const serializable = profiles.map((p) => ({
+    id: p.id,
+    name: p.name,
+    url: p.url,
+    createdAt: p.createdAt,
+    isLocal: true,
+  }));
+  window.localStorage.setItem(getLocalStyleProfileStorageKey(), JSON.stringify(serializable));
+};
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(file);
+  });
+
 export const useJobStore = create<JobStore>((set, get) => ({
   jobs: {},
   activeSessionId: null,
@@ -81,9 +131,11 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   fetchStyleProfiles: async () => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = await getScopedAuthHeaders();
+      if (!headers.Authorization) {
+        set({ styleProfiles: readLocalStyleProfiles() });
+        return;
+      }
       
       const res = await fetch(`${API_URL}/api/v1/style/profiles`, { headers });
       if (res.ok) {
@@ -104,9 +156,13 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   deleteStyleProfile: async (id: string) => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = await getScopedAuthHeaders();
+      if (!headers.Authorization) {
+        const next = get().styleProfiles.filter((p) => p.id !== id);
+        writeLocalStyleProfiles(next);
+        set({ styleProfiles: next });
+        return;
+      }
 
       const res = await fetch(`${API_URL}/api/v1/style/profiles/${id}`, {
         method: 'DELETE',
@@ -124,9 +180,21 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   uploadStyleProfile: async (file: File) => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = await getScopedAuthHeaders();
+      if (!headers.Authorization) {
+        const url = await fileToDataUrl(file);
+        const profile: StyleProfile = {
+          id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name || 'Style Profile',
+          url,
+          createdAt: Date.now(),
+          isLocal: true,
+        };
+        const next = [profile, ...readLocalStyleProfiles()];
+        writeLocalStyleProfiles(next);
+        set({ styleProfiles: next });
+        return;
+      }
 
       const formData = new FormData();
       formData.append('file', file);
@@ -145,9 +213,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   uploadTrainingPair: async (brackets: File[], finalEdit: File) => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = await getScopedAuthHeaders();
 
       const formData = new FormData();
       brackets.forEach(b => formData.append('brackets', b));
@@ -167,9 +233,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   overrideWithManualEdit: async (jobId: string, file: File) => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = await getScopedAuthHeaders();
 
       const formData = new FormData();
       formData.append('file', file);
@@ -205,9 +269,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   fetchQuota: async () => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = await getScopedAuthHeaders();
 
       const res = await fetch(`${API_URL}/api/v1/quota`, { headers });
       if (res.ok) {
@@ -237,16 +299,14 @@ export const useJobStore = create<JobStore>((set, get) => ({
 
   rehydrateSession: async (sessionId: string) => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = await getScopedAuthHeaders();
 
       const res = await fetch(`${API_URL}/api/v1/jobs/active?session_id=${sessionId}`, { headers });
       if (res.ok) {
         const data = await res.json();
         const now = Date.now();
         set((state) => {
-          const newJobs = { ...state.jobs };
+          const newJobs: Record<string, Job> = {};
           data.jobs.forEach((jobData: any) => {
             newJobs[jobData.id] = {
               id: jobData.id,
@@ -285,10 +345,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
     if (dueIds.length === 0) return;
 
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const headers = await getScopedAuthHeaders({ includeContentTypeJson: true });
 
       const res = await fetch(`${API_URL}/api/v1/jobs/batch-status`, {
         method: 'POST',
@@ -318,15 +375,16 @@ export const useJobStore = create<JobStore>((set, get) => ({
               nextPollAt: Date.now() + delayMs
             };
             
-            // Map the result properties
-            if (jobData.result && jobData.status === 'COMPLETED') {
+            // Backend returns COMPLETED or FLAGGED for reviewable jobs; both ship signed
+            // URLs and need to be normalized into the ProcessedHDR shape.
+            if (jobData.result && (jobData.status === 'COMPLETED' || jobData.status === 'FLAGGED')) {
                 updatedJobs[jobData.id].result = {
                     id: jobData.id,
                     url: jobData.result.url,
                     thumbUrl: jobData.result.thumb_url || jobData.result.url,
-                    originalUrl: jobData.result.original_url || jobData.result.original_blob_path, // If we get signed URL for this it should be mapped
+                    originalUrl: jobData.result.original_url || jobData.result.original_blob_path,
                     sceneName: jobData.result.room,
-                    status: 'NEEDS_REVIEW', // Manual Default as per plan
+                    status: 'NEEDS_REVIEW',
                     isFlagged: jobData.result.isFlagged,
                     vlmReport: jobData.result.vlmReport
                 };

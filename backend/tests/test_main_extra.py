@@ -47,7 +47,7 @@ def test_validate_session_valid():
     assert response.json()["valid"] is True
     app.dependency_overrides.clear()
 
-def test_validate_session_valid_even_if_taken():
+def test_validate_session_invalid_if_taken():
     db_mock = MagicMock()
     db_mock.check_session_code_availability.return_value = False
 
@@ -55,7 +55,10 @@ def test_validate_session_valid_even_if_taken():
     app.dependency_overrides[get_database] = lambda: db_mock
     response = client.post("/api/v1/sessions/validate", json={"code": "longenoughcode"})
     assert response.status_code == 200
-    assert response.json()["valid"] is True
+    data = response.json()
+    assert data["valid"] is False
+    assert data["message"] == "Code is already in use"
+    assert data["suggested"] is not None
     app.dependency_overrides.clear()
 
 def test_group_photos_dummy_key():

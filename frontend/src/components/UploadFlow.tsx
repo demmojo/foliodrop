@@ -12,6 +12,7 @@ import { useJobStore, ProcessedHDR } from '../store/useJobStore';
 import { parsePhotoMetadata, groupPhotosIntoScenes, PhotoGroup, PhotoMeta } from '../utils/exif';
 import pLimit from 'p-limit';
 import { UploadCloud, Layers, Loader2, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { getScopedAuthHeaders } from '@/lib/requestHeaders';
 
 type FlowState = 'IDLE' | 'PARSING' | 'CONFIRMATION' | 'UPLOADING' | 'PROCESSING' | 'REVIEW';
 
@@ -57,9 +58,7 @@ export default function UploadFlow() {
       } else {
         const fetchSession = async () => {
           try {
-            const { auth } = await import('@/lib/firebase');
-            const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-            const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const headers = await getScopedAuthHeaders();
 
             const res = await fetch(`${API_URL}/api/v1/sessions/generate`, { headers });
             if (res.ok) {
@@ -92,7 +91,15 @@ export default function UploadFlow() {
   const handleResumeSession = useCallback(async (id: string) => {
     localStorage.setItem('hdr_session_code', id);
     await rehydrateSession(id);
-    setFlowState('REVIEW');
+    
+    const currentJobs = useJobStore.getState().jobs;
+    const allJobs = Object.values(currentJobs);
+    
+    if (allJobs.length > 0 && allJobs.some(j => ['PENDING', 'PROCESSING'].includes(j.status))) {
+        setFlowState('PROCESSING');
+    } else {
+        setFlowState('REVIEW');
+    }
   }, [rehydrateSession]);
 
   useEffect(() => {
@@ -211,10 +218,7 @@ export default function UploadFlow() {
           
           if (validThumbnails.length === thumbnails.length) {
               try {
-                  const { auth } = await import('@/lib/firebase');
-                  const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-                  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-                  if (token) headers['Authorization'] = `Bearer ${token}`;
+                  const headers = await getScopedAuthHeaders({ includeContentTypeJson: true });
 
                   const res = await fetch(`${API_URL}/api/v1/group-photos`, {
                       method: 'POST',
@@ -300,10 +304,7 @@ export default function UploadFlow() {
       
       const fileNames = filePayloads.map(fp => fp.uniqueName);
       
-      const { auth } = await import('@/lib/firebase');
-      const token = auth?.currentUser ? await auth.currentUser.getIdToken() : null;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const headers = await getScopedAuthHeaders({ includeContentTypeJson: true });
 
       const urlRes = await fetch(`${API_URL}/api/v1/upload-urls`, {
         method: 'POST',
@@ -405,6 +406,7 @@ export default function UploadFlow() {
           setFlowState('IDLE');
           setSessionId(null);
           setSessionCode('');
+          setPendingSessionCode(null);
           setPhotoGroups([]);
           setUploadedFiles([]);
           localStorage.removeItem('hdr_session_code');
@@ -544,6 +546,9 @@ export default function UploadFlow() {
                 localStorage.removeItem('hdr_session_code');
                 setPendingSessionCode(null);
                 setShowResumePrompt(false);
+                setJobs({});
+                setPhotoGroups([]);
+                setUploadedFiles([]);
                 // Let the useEffect handle the generation
               }}
               className="w-full py-3 bg-surface border border-border text-foreground rounded-full font-semibold hover:bg-muted/5 active:scale-95 transition-all"
@@ -667,6 +672,11 @@ export default function UploadFlow() {
                 localStorage.removeItem('hdr_session_code');
                 localStorage.removeItem('hdr_room_code');
                 setSessionCode('');
+                setSessionId(null);
+                setPendingSessionCode(null);
+                setJobs({});
+                setPhotoGroups([]);
+                setUploadedFiles([]);
                 // Let the useEffect handle the generation
               }}
               className="text-xs text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors mt-2"
@@ -868,6 +878,18 @@ export default function UploadFlow() {
                onConfirm={handleFinalExport}
                onDiscardItem={handleDiscardItem}
                onKeepItem={handleKeepItem}
+               onStartNewSession={() => {
+                  setFlowState('IDLE');
+                  setSessionId(null);
+                  setSessionCode('');
+                  setPendingSessionCode(null);
+                  setPhotoGroups([]);
+                  setUploadedFiles([]);
+                  localStorage.removeItem('hdr_session_code');
+                  if (window.location.search) {
+                      window.history.pushState({}, '', window.location.pathname);
+                  }
+               }}
             />
         </div>
       )}

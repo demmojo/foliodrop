@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { ArrowLeft, GitMerge, FileLock2, Aperture, Layers, Zap, Download } from 'lucide-react';
+import { ArrowLeft, GitMerge, FileLock2, Aperture, Layers, Zap, Download, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
@@ -112,6 +112,10 @@ export default function HowItWorksPage() {
             <div className="border-l-2 border-border pl-4 py-1">
               <strong className="block text-foreground mb-1">Deterministic Generative Polish</strong>
               <span className="text-sm text-muted">The pruned inputs are refined by a VLM running at a strict temperature of <code>0.0</code>. This guarantees structural adherence while applying agency-specific color grading.</span>
+            </div>
+            <div className="border-l-2 border-border pl-4 py-1">
+              <strong className="text-foreground mb-1 inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Structural QA Gate (Anti-Hallucination)</strong>
+              <span className="block text-sm text-muted mt-1">Every generated frame is matched back to the OpenCV base using SIFT + MAGSAC++ homography. If feature inliers collapse or large feature voids appear (a tell-tale sign of invented windows or moved walls), Folio retries with a corrective prompt and—if the budget is exhausted—ships the OpenCV base instead, flagged for human review.</span>
             </div>
           </div>
         </section>

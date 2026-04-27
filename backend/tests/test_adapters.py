@@ -175,7 +175,6 @@ def test_gcs_blob_storage_adapter():
 def test_cloud_tasks_adapter():
     with patch("google.cloud.tasks_v2.CloudTasksClient"):
         adapter = CloudTasksAdapter("proj", "reg", "queue")
-        adapter.enqueue_room_processing("sess", "room", ["photo1"])
         adapter.enqueue_job("job", "sess", "room", ["photo"])
         
         # test exception in enqueue_job

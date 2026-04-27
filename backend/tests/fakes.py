@@ -23,10 +23,12 @@ class FakeDatabase(IDatabase):
     def get_processing_results(self, session_id: str) -> List[dict]:
         return self.results.get(session_id, [])
 
-    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: dict = None, error: str = None):
+    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: dict = None, error: str = None, agency_id: str = None):
         if job_id not in self.jobs:
             self.jobs[job_id] = {"id": job_id, "session_id": session_id, "idempotency_key": idempotency_key}
         self.jobs[job_id]["status"] = status
+        if agency_id is not None:
+            self.jobs[job_id]["agency_id"] = agency_id
         if result is not None:
             self.jobs[job_id]["result"] = result
         if error is not None:
@@ -46,6 +48,22 @@ class FakeDatabase(IDatabase):
 
     def get_jobs(self, job_ids: List[str]) -> List[dict]:
         return [self.jobs[jid] for jid in job_ids if jid in self.jobs]
+
+    def is_blob_path_owned_by_agency(self, blob_path: str, agency_id: str) -> bool:
+        if blob_path.startswith(f"style_profiles/{agency_id}/") or blob_path.startswith(f"training_pairs/{agency_id}/"):
+            return True
+        for job in self.jobs.values():
+            result = job.get("result") or {}
+            job_agency = job.get("agency_id") or result.get("agency_id")
+            if job_agency != agency_id:
+                continue
+            if blob_path in {
+                result.get("blob_path"),
+                result.get("thumb_blob_path"),
+                result.get("original_blob_path"),
+            }:
+                return True
+        return False
 
     def get_cached_group(self, group_hash: str) -> Optional[dict]:
         if not hasattr(self, 'group_cache'):
@@ -167,23 +185,21 @@ class FakeBlobStorage(IBlobStorage):
         pass
 
 class FakeTaskQueue(ITaskQueue):
-    def enqueue_room_processing(self, session_id: str, room_name: str, photos: List[str]):
-        pass
     def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str], agency_id: str = "default"):
         # In a real system, this would push to Cloud Tasks. For local development/testing,
         # we can simulate the Cloud Task hitting our own webhook synchronously (or async task)
         import asyncio
         async def simulate_webhook():
-            from backend.main import process_job_task, CloudTaskPayload
+            from backend.main import _run_process_job_task, CloudTaskPayload
             from backend.main import get_database, get_blob_storage, get_event_publisher
             payload = CloudTaskPayload(job_id=job_id, session_id=session_id, room_name=room_name, photos=photos, agency_id=agency_id)
-            
-            await process_job_task(
+
+            await _run_process_job_task(
                 payload=payload,
                 event_publisher=get_event_publisher(),
                 task_queue=self,
                 storage=get_blob_storage(),
-                db=get_database()
+                db=get_database(),
             )
         # Note: in a pure sync test environment this might fail if event loop isn't running,
         # but FastApi should have an event loop.

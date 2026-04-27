@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import Login from './page';
-import { auth } from '@/lib/firebase';
 import { signInWithPopup } from 'firebase/auth';
+
+const { firebaseState } = vi.hoisted(() => ({
+  firebaseState: { auth: {} as Record<string, never> | null },
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -11,7 +14,9 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/firebase', () => ({
-  auth: {},
+  get auth() {
+    return firebaseState.auth;
+  },
   googleProvider: {},
   appleProvider: {}
 }));
@@ -23,6 +28,7 @@ vi.mock('firebase/auth', () => ({
 describe('Login Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    firebaseState.auth = {};
   });
 
   it('renders login form', () => {
@@ -90,5 +96,21 @@ describe('Login Page', () => {
     await waitFor(() => {
       expect(screen.getByText('Apple login failed')).toBeInTheDocument();
     });
+  });
+
+  it('shows configuration error when Firebase auth is unavailable', async () => {
+    firebaseState.auth = null;
+    render(<Login />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Continue with Google/i));
+    });
+    expect(screen.getByText('Firebase not configured')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Continue with Apple/i));
+    });
+    expect(screen.getByText('Firebase not configured')).toBeInTheDocument();
+    expect(signInWithPopup).not.toHaveBeenCalled();
   });
 });

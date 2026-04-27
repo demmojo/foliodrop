@@ -112,11 +112,11 @@ def test_process_job_task():
 def test_get_active_jobs():
     from backend.main import get_database
     db = get_database()
-    db.save_job("job_active_1", "session", "COMPLETED", "key_active_1", result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"})
-    db.save_job("job_active_2", "session", "COMPLETED", "key_active_2") # no result
-    db.save_job("job_active_3", "session", "COMPLETED", "key_active_3", result={"thumb_blob_path": "b"}) # no blob
-    db.save_job("job_active_4", "session", "COMPLETED", "key_active_4", result={"blob_path": "a", "original_blob_path": "c"}) # no thumb
-    db.save_job("job_active_5", "session", "COMPLETED", "key_active_5", result={"blob_path": "a", "thumb_blob_path": "b"}) # no original
+    db.save_job("job_active_1", "session", "COMPLETED", "key_active_1", result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"}, agency_id="default")
+    db.save_job("job_active_2", "session", "COMPLETED", "key_active_2", agency_id="default") # no result
+    db.save_job("job_active_3", "session", "COMPLETED", "key_active_3", result={"thumb_blob_path": "b"}, agency_id="default") # no blob
+    db.save_job("job_active_4", "session", "COMPLETED", "key_active_4", result={"blob_path": "a", "original_blob_path": "c"}, agency_id="default") # no thumb
+    db.save_job("job_active_5", "session", "COMPLETED", "key_active_5", result={"blob_path": "a", "thumb_blob_path": "b"}, agency_id="default") # no original
     
     resp = client.get("/api/v1/jobs/active?session_id=session")
     assert resp.status_code == 200
@@ -133,6 +133,7 @@ def test_get_active_jobs_includes_signed_urls_for_flagged():
         "FLAGGED",
         "key_flagged_1",
         result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"},
+        agency_id="default",
     )
 
     resp = client.get("/api/v1/jobs/active?session_id=session_flagged")
@@ -147,10 +148,10 @@ def test_get_active_jobs_includes_signed_urls_for_flagged():
 def test_batch_status():
     from backend.main import get_database
     db = get_database()
-    db.save_job("job_batch_1", "session", "PENDING", "key_batch_1")
-    db.save_job("job_batch_2", "session", "COMPLETED", "key_batch_2", result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"})
-    db.save_job("job_batch_3", "session", "COMPLETED", "key_batch_3", result={"blob_path": "a"}) # no thumb
-    db.save_job("job_batch_4", "session", "COMPLETED", "key_batch_4", result={"thumb_blob_path": "b"}) # no blob
+    db.save_job("job_batch_1", "session", "PENDING", "key_batch_1", agency_id="default")
+    db.save_job("job_batch_2", "session", "COMPLETED", "key_batch_2", result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"}, agency_id="default")
+    db.save_job("job_batch_3", "session", "COMPLETED", "key_batch_3", result={"blob_path": "a"}, agency_id="default") # no thumb
+    db.save_job("job_batch_4", "session", "COMPLETED", "key_batch_4", result={"thumb_blob_path": "b"}, agency_id="default") # no blob
     
     req = {"job_ids": ["job_batch_1", "job_batch_2", "job_batch_3", "job_batch_4"]}
     resp = client.post("/api/v1/jobs/batch-status", json=req)
@@ -168,6 +169,7 @@ def test_batch_status_includes_signed_urls_for_flagged():
         "FLAGGED",
         "key_batch_flagged",
         result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"},
+        agency_id="default",
     )
     req = {"job_ids": ["job_batch_flagged"]}
     resp = client.post("/api/v1/jobs/batch-status", json=req)
@@ -180,17 +182,19 @@ def test_batch_status_includes_signed_urls_for_flagged():
     assert "original_url" in jobs[0]["result"]
 
 def test_batch_signed_url():
-    req = {"blob_paths": ["path1", "path2"]}
+    req = {"blob_paths": ["style_profiles/default/path1", "training_pairs/default/path2"]}
     resp = client.post("/api/v1/jobs/batch-signed-url", json=req)
     assert resp.status_code == 200
     assert len(resp.json()["urls"]) == 2
 
 def test_override_job_image_error():
+    from backend.tests.fakes import FakeBlobStorage
+    image_bytes = FakeBlobStorage().download_blobs("sess", ["seed.jpg"])[0]
     from backend.main import get_database
     db = get_database()
     # Missing job
     with open("test.jpg", "wb") as f:
-        f.write(b"data")
+        f.write(image_bytes)
     with open("test.jpg", "rb") as f:
         resp = client.post("/api/v1/jobs/missing_override/override", files={"file": ("test.jpg", f, "image/jpeg")})
     assert resp.status_code == 400
@@ -200,3 +204,208 @@ def test_override_job_image_error():
 def test_log_debug_noop_does_not_raise():
     from backend.main import _log_debug
     _log_debug("message", {"k": 1}, hyp="H0")
+
+
+def test_process_job_oidc_skipped_when_invoker_unset():
+    # No EXPECTED_TASK_INVOKER => verification is skipped entirely.
+    from backend.main import get_database
+    db = get_database()
+    db.save_job("job_oidc_skip", "session", "PENDING", "key_oidc_skip")
+
+    req = {
+        "job_id": "job_oidc_skip",
+        "session_id": "session",
+        "room_name": "Room",
+        "photos": ["a.jpg"],
+    }
+    resp = client.post("/api/v1/jobs/process", json=req)
+    # Returns 200 even if auth would otherwise be required, because the env var is unset.
+    assert resp.status_code == 200
+
+
+def test_process_job_oidc_missing_token():
+    with patch.dict(os.environ, {"EXPECTED_TASK_INVOKER": "tasks@example.iam.gserviceaccount.com"}):
+        req = {
+            "job_id": "j",
+            "session_id": "s",
+            "room_name": "r",
+            "photos": ["a.jpg"],
+        }
+        resp = client.post("/api/v1/jobs/process", json=req)
+        assert resp.status_code == 401
+
+
+def test_process_job_oidc_invalid_token():
+    with patch.dict(os.environ, {"EXPECTED_TASK_INVOKER": "tasks@example.iam.gserviceaccount.com"}):
+        with patch("google.oauth2.id_token.verify_oauth2_token", side_effect=ValueError("bad token")):
+            req = {
+                "job_id": "j",
+                "session_id": "s",
+                "room_name": "r",
+                "photos": ["a.jpg"],
+            }
+            resp = client.post(
+                "/api/v1/jobs/process",
+                json=req,
+                headers={"Authorization": "Bearer bogus"},
+            )
+            assert resp.status_code == 401
+
+
+def test_process_job_oidc_wrong_invoker():
+    with patch.dict(os.environ, {"EXPECTED_TASK_INVOKER": "tasks@example.iam.gserviceaccount.com"}):
+        with patch(
+            "google.oauth2.id_token.verify_oauth2_token",
+            return_value={"email": "attacker@evil.com", "email_verified": True},
+        ):
+            req = {
+                "job_id": "j",
+                "session_id": "s",
+                "room_name": "r",
+                "photos": ["a.jpg"],
+            }
+            resp = client.post(
+                "/api/v1/jobs/process",
+                json=req,
+                headers={"Authorization": "Bearer x"},
+            )
+            assert resp.status_code == 403
+
+
+def test_process_job_oidc_accepts_expected_invoker():
+    from backend.main import get_database
+    db = get_database()
+    db.save_job("job_oidc_ok", "session", "PENDING", "key_oidc_ok")
+
+    with patch.dict(os.environ, {"EXPECTED_TASK_INVOKER": "tasks@example.iam.gserviceaccount.com"}):
+        with patch(
+            "google.oauth2.id_token.verify_oauth2_token",
+            return_value={
+                "email": "tasks@example.iam.gserviceaccount.com",
+                "email_verified": True,
+            },
+        ):
+            req = {
+                "job_id": "job_oidc_ok",
+                "session_id": "session",
+                "room_name": "Room",
+                "photos": ["a.jpg"],
+            }
+            resp = client.post(
+                "/api/v1/jobs/process",
+                json=req,
+                headers={"Authorization": "Bearer x"},
+            )
+            assert resp.status_code == 200
+
+
+def test_jobs_endpoints_filter_other_agency_data():
+    from backend.main import get_database
+    db = get_database()
+    db.save_job(
+        "job_default",
+        "session_authz",
+        "COMPLETED",
+        "key_default",
+        result={"blob_path": "a", "thumb_blob_path": "b", "original_blob_path": "c"},
+        agency_id="default",
+    )
+    db.save_job(
+        "job_other",
+        "session_authz",
+        "COMPLETED",
+        "key_other",
+        result={"blob_path": "x", "thumb_blob_path": "y", "original_blob_path": "z"},
+        agency_id="other",
+    )
+
+    active = client.get("/api/v1/jobs/active?session_id=session_authz")
+    assert active.status_code == 200
+    ids = {j["id"] for j in active.json()["jobs"]}
+    assert ids == {"job_default"}
+
+    batch = client.post("/api/v1/jobs/batch-status", json={"job_ids": ["job_default", "job_other"]})
+    assert batch.status_code == 200
+    ids = {j["id"] for j in batch.json()["jobs"]}
+    assert ids == {"job_default"}
+
+
+def test_batch_signed_url_rejects_unowned_paths():
+    req = {"blob_paths": ["style_profiles/default/ok", "style_profiles/other/nope"]}
+    resp = client.post("/api/v1/jobs/batch-signed-url", json=req)
+    assert resp.status_code == 200
+    paths = [u["path"] for u in resp.json()["urls"]]
+    assert paths == ["style_profiles/default/ok"]
+
+
+def test_validate_production_security_config_requires_expected_invoker():
+    from backend.main import _validate_production_security_config
+    with patch.dict(os.environ, {"APP_ENV": "production"}, clear=False):
+        os.environ.pop("EXPECTED_TASK_INVOKER", None)
+        with pytest.raises(RuntimeError):
+            _validate_production_security_config()
+
+
+def test_upload_style_image_rejects_oversized_file():
+    with patch("backend.main.MAX_UPLOAD_BYTES", 8):
+        with open("big.jpg", "wb") as f:
+            f.write(b"0123456789")
+        with open("big.jpg", "rb") as f:
+            resp = client.post("/api/v1/style/upload", files={"file": ("big.jpg", f, "image/jpeg")})
+        os.remove("big.jpg")
+    assert resp.status_code == 413
+
+
+def test_upload_training_pair_rejects_too_many_brackets():
+    with patch("backend.main.MAX_TRAINING_BRACKETS", 1):
+        with open("b1.jpg", "wb") as f:
+            f.write(b"data1")
+        with open("b2.jpg", "wb") as f:
+            f.write(b"data2")
+        with open("final.jpg", "wb") as f:
+            f.write(b"final")
+        with open("b1.jpg", "rb") as b1, open("b2.jpg", "rb") as b2, open("final.jpg", "rb") as final:
+            resp = client.post(
+                "/api/v1/training/upload",
+                files=[
+                    ("brackets", ("b1.jpg", b1, "image/jpeg")),
+                    ("brackets", ("b2.jpg", b2, "image/jpeg")),
+                    ("final_edit", ("final.jpg", final, "image/jpeg")),
+                ],
+            )
+        os.remove("b1.jpg")
+        os.remove("b2.jpg")
+        os.remove("final.jpg")
+    assert resp.status_code == 413
+
+
+def test_process_job_oidc_missing_invoker_in_production():
+    with patch.dict(os.environ, {"APP_ENV": "production"}, clear=False):
+        os.environ.pop("EXPECTED_TASK_INVOKER", None)
+        req = {
+            "job_id": "j",
+            "session_id": "s",
+            "room_name": "r",
+            "photos": ["a.jpg"],
+        }
+        resp = client.post("/api/v1/jobs/process", json=req, headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 500
+
+
+def test_upload_style_image_rejects_oversized_dimensions():
+    from backend.tests.fakes import FakeBlobStorage
+    image_bytes = FakeBlobStorage().download_blobs("sess", ["seed.jpg"])[0]
+    with patch("backend.main.MAX_IMAGE_DIMENSION", 1):
+        resp = client.post(
+            "/api/v1/style/upload",
+            files={"file": ("tiny-limit.jpg", image_bytes, "image/jpeg")},
+        )
+    assert resp.status_code == 413
+
+
+def test_upload_style_image_rejects_invalid_image():
+    resp = client.post(
+        "/api/v1/style/upload",
+        files={"file": ("not-image.jpg", b"not-an-image", "image/jpeg")},
+    )
+    assert resp.status_code == 400

@@ -66,6 +66,7 @@ describe('UploadFlow Component', () => {
   beforeEach(() => {
     mockSearchParams.clear();
     vi.clearAllMocks();
+    localStorage.clear();
     useJobStore.setState({
       jobs: {},
       activeSessionId: null,
@@ -187,6 +188,9 @@ describe('UploadFlow Component', () => {
       if (url.includes('/api/v1/finalize-job')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ job_ids: ['job1'] }) });
       }
+      if (url.includes('/api/v1/jobs/active')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
+      }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) });
     });
 
@@ -297,6 +301,15 @@ describe('UploadFlow Component', () => {
   });
 
   it('handles keep and discard items', async () => {
+    (global.fetch as any).mockImplementation((url: any) => {
+        if (url.includes('/api/v1/jobs/active')) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ 
+                jobs: [{ id: 'job1', status: 'NEEDS_REVIEW', result: { url: 'blob:http', room: 'Room', isFlagged: true } }] 
+            }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
     mockSearchParams.set('session', 'sess');
     useJobStore.setState({
       activeSessionId: 'sess',
@@ -393,6 +406,11 @@ describe('UploadFlow Component', () => {
     
     await waitFor(() => {
       expect(screen.getByTestId('mock-review-grid')).toBeInTheDocument();
+    });
+
+    // Keep the item to move it to READY
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('review-keep'));
     });
 
     const confirmBtn = screen.getByTestId('review-confirm');
@@ -549,6 +567,9 @@ describe('UploadFlow Component', () => {
       }
       if (url.includes('/api/v1/finalize-job')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ job_ids: ['job1'] }) });
+      }
+      if (url.includes('/api/v1/jobs/active')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: [] }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}), blob: () => Promise.resolve(new Blob()) });
     });
@@ -792,8 +813,28 @@ describe('UploadFlow Component', () => {
     expect(toast.textContent).toContain('RAW processing is currently not supported');
   });
 
+  it('scopes unauthenticated session generation with anon agency header', async () => {
+    await act(async () => {
+      render(<UploadFlow />);
+    });
+
+    await waitFor(() => {
+      const generateCall = (global.fetch as any).mock.calls.find((call: any[]) =>
+        String(call[0]).includes('/api/v1/sessions/generate')
+      );
+      expect(generateCall).toBeTruthy();
+    });
+
+    const generateCall = (global.fetch as any).mock.calls.find((call: any[]) =>
+      String(call[0]).includes('/api/v1/sessions/generate')
+    );
+    expect(generateCall[1]?.headers?.['x-agency-id']).toMatch(/^anon_/);
+    expect(generateCall[1]?.headers?.Authorization).toBeUndefined();
+  });
+
 
   it('handles zip fallback when native share fails', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     // Reset Zustand state first
     useJobStore.setState({
       activeSessionId: null,
@@ -818,8 +859,14 @@ describe('UploadFlow Component', () => {
       if (url.includes('/api/v1/sessions/')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobs: {} }) });
       }
+      if (url.includes('/api/v1/jobs/active')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ 
+            jobs: [{ id: 'job1', status: 'COMPLETED', result: { url: 'blob:http', room: 'Room', isFlagged: false } }] 
+        }) });
+      }
       return Promise.resolve({
         ok: true,
+        json: () => Promise.resolve({ jobs: [] }),
         blob: () => Promise.resolve(new Blob(['test'], { type: 'image/jpeg' }))
       });
     });
@@ -833,6 +880,11 @@ describe('UploadFlow Component', () => {
     
     await waitFor(() => {
       expect(screen.getByTestId('mock-review-grid')).toBeInTheDocument();
+    });
+
+    // Keep the item to move it to READY
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('review-keep'));
     });
 
     const confirmBtn = screen.getByTestId('review-confirm');

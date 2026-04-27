@@ -7,11 +7,12 @@ class IDatabase(Protocol):
     def get_processing_results(self, session_id: str) -> List[dict]: ... # pragma: no cover
     
     # Job-related methods for async polling
-    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: Optional[dict] = None, error: Optional[str] = None): ... # pragma: no cover
+    def save_job(self, job_id: str, session_id: str, status: str, idempotency_key: str, result: Optional[dict] = None, error: Optional[str] = None, agency_id: Optional[str] = None): ... # pragma: no cover
     def get_job(self, job_id: str) -> Optional[dict]: ... # pragma: no cover
     def get_job_by_idempotency_key(self, idempotency_key: str) -> Optional[dict]: ... # pragma: no cover
     def get_active_jobs(self, session_id: str) -> List[dict]: ... # pragma: no cover
     def get_jobs(self, job_ids: List[str]) -> List[dict]: ... # pragma: no cover
+    def is_blob_path_owned_by_agency(self, blob_path: str, agency_id: str) -> bool: ... # pragma: no cover
     
     # Caching methods
     def get_cached_group(self, group_hash: str) -> Optional[dict]: ... # pragma: no cover
@@ -39,7 +40,6 @@ class IBlobStorage(Protocol):
     def delete_blob(self, blob_path: str) -> None: ... # pragma: no cover
 
 class ITaskQueue(Protocol):
-    def enqueue_room_processing(self, session_id: str, room_name: str, photos: List[str]): ... # pragma: no cover
     def enqueue_job(self, job_id: str, session_id: str, room_name: str, photos: List[str], agency_id: str = "default"): ... # pragma: no cover
 
 class IEventPublisher(Protocol):

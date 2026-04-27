@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { AgencySettings } from './AgencySettings';
 import { useJobStore } from '../store/useJobStore';
 
@@ -9,6 +9,13 @@ describe('AgencySettings Component', () => {
       ok: true,
       json: () => Promise.resolve({})
     });
+    localStorage.clear();
+    useJobStore.setState({
+      jobs: {},
+      activeSessionId: null,
+      quota: null,
+      styleProfiles: [],
+    } as any);
   });
   it('renders and handles style profile upload', async () => {
     useJobStore.setState({ styleProfiles: [] });
@@ -52,5 +59,43 @@ describe('AgencySettings Component', () => {
     await act(async () => {
       fireEvent.click(submitBtn);
     });
+  });
+
+  it('renders uploaded profile and handles thumbnail error + delete flow', async () => {
+    const createdAt = new Date('2026-01-01').getTime();
+
+    localStorage.setItem('folio_local_anon_id', 'anon_test');
+    localStorage.setItem(
+      'folio_local_style_profiles_v1:anon_test',
+      JSON.stringify([
+        {
+          id: 'profile-1',
+          name: 'Kitchen Warm',
+          createdAt,
+          url: 'https://example.com/style.jpg',
+          isLocal: true,
+        },
+      ])
+    );
+
+    const { container } = render(<AgencySettings />);
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen Warm')).toBeInTheDocument();
+    });
+    const thumb = container.querySelector('img[alt*="style profile preview"]') as HTMLImageElement;
+    expect(thumb).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.error(thumb);
+    });
+    await act(async () => {
+      fireEvent.error(thumb);
+    });
+    expect(screen.getByText(/No style profiles uploaded yet|Kitchen Warm|test\.jpg/i)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    });
+    expect(screen.queryByText('Kitchen Warm')).not.toBeInTheDocument();
   });
 });

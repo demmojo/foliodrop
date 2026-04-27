@@ -32,6 +32,7 @@
   - *Real Estate Heuristics:* Utilizes CLAHE in the LAB color space to boost room brightness without the glowing halos common in cheap HDR software.
 - **Bracket Pruning & Optimized Uploads:** To optimize the VLM process, Folio sends only two inputs to the model: the perfectly fused OpenCV base (for interior details) and the single darkest bracket (for window recovery). Uploads are hoisted to accelerate processing.
 - **Deterministic Generative Polish:** The pruned 2K inputs are refined by a Vision Language Model (VLM) running at a strict temperature of `0.0`. This guarantees consistent structural adherence while balancing interior lighting, executing window pulls, and applying agency-specific color grading based on explicit training pairs provided by the agency.
+- **Structural QA Gate (Anti-Hallucination):** Every generated frame is compared back to the OpenCV base using SIFT feature matching with MAGSAC++ homography. If the inlier ratio drops below threshold or large feature voids appear (a tell-tale sign of invented windows or moved walls), the system automatically retries with a corrective prompt. After the retry budget is exhausted, the fused OpenCV base is shipped instead of the AI output and the result is flagged for human review—so no hallucinated geometry ever reaches the listing.
 
 ## 5. Stage 4: Zero-Wait Local Delivery
 

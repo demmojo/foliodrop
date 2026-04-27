@@ -21,6 +21,9 @@ describe('HowItWorksPage', () => {
     expect(screen.getByText(/The Hybrid Engine/i)).toBeInTheDocument();
     expect(screen.getByText(/Zero-Wait Local Delivery/i)).toBeInTheDocument();
 
+    // QA gate (anti-hallucination) is wired into the hybrid engine and must be documented.
+    expect(screen.getByText(/Structural QA Gate/i)).toBeInTheDocument();
+
     // Check if back link exists
     const link = screen.getByRole('link');
     expect(link).toHaveAttribute('href', '/');
