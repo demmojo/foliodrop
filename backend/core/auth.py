@@ -26,7 +26,11 @@ def _init_firebase():
     if not firebase_admin._apps:
         # If in GCP (Cloud Run), default credentials will be used automatically.
         # For local dev, GOOGLE_APPLICATION_CREDENTIALS must be set.
-        firebase_admin.initialize_app()
+        options = {}
+        firebase_project_id = os.environ.get("FIREBASE_PROJECT_ID")
+        if firebase_project_id:
+            options["projectId"] = firebase_project_id
+        firebase_admin.initialize_app(options=options or None)
 
 
 def _is_production() -> bool:

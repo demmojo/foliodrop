@@ -377,6 +377,49 @@ def test_result_level_agency_fallback_is_honored_for_visibility_and_signing():
     assert signed.json()["urls"][0]["path"] == "session_result_agency/thumb.webp"
 
 
+def test_batch_signed_url_handles_collisions_across_agencies():
+    """Regression: two tenants having a job whose result.blob_path collides
+    must not block the rightful owner from receiving a signed URL.
+
+    Production hit this when job naming did not include agency_id and
+    Firestore's `.limit(1)` returned a sibling tenant's document first."""
+    from backend.main import get_database
+    db = get_database()
+    shared_blob = "shared-session/hdr_collision.jpg"
+    shared_thumb = "shared-session/thumb_collision.webp"
+
+    db.save_job(
+        "job_collision_other",
+        "shared-session",
+        "COMPLETED",
+        "key_collision_other",
+        result={
+            "blob_path": shared_blob,
+            "thumb_blob_path": shared_thumb,
+        },
+        agency_id="agency_other",
+    )
+    db.save_job(
+        "job_collision_default",
+        "shared-session",
+        "COMPLETED",
+        "key_collision_default",
+        result={
+            "blob_path": shared_blob,
+            "thumb_blob_path": shared_thumb,
+        },
+        agency_id="default",
+    )
+
+    resp = client.post(
+        "/api/v1/jobs/batch-signed-url",
+        json={"blob_paths": [shared_blob, shared_thumb]},
+    )
+    assert resp.status_code == 200
+    paths = sorted(u["path"] for u in resp.json()["urls"])
+    assert paths == sorted([shared_blob, shared_thumb])
+
+
 def test_batch_signed_url_accepts_nested_result_agency_ownership():
     from backend.main import get_database
     db = get_database()

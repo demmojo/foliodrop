@@ -112,8 +112,12 @@ class FirestoreAdapter(IDatabase):
             return True
 
         # Job outputs are stored by session path. Resolve ownership via job.result fields.
+        # NOTE: blob_path can collide across tenants (it does not include agency_id),
+        # so we must iterate all matches and accept if ANY job in the result set is
+        # owned by the calling agency. A previous .limit(1) caused false negatives
+        # whenever Firestore returned a sibling tenant's document first.
         for field in ("result.blob_path", "result.thumb_blob_path", "result.original_blob_path"):
-            docs = self.db.collection("jobs").where(field, "==", blob_path).limit(1).stream()
+            docs = self.db.collection("jobs").where(field, "==", blob_path).limit(25).stream()
             for doc in docs:
                 job = doc.to_dict() or {}
                 job_agency = job.get("agency_id") or (job.get("result") or {}).get("agency_id")
