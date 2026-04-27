@@ -432,10 +432,16 @@ export const useJobStore = create<JobStore>((set, get) => ({
     const state = get();
     const requests = jobIds
       .map((jobId) => ({ jobId, result: state.jobs[jobId]?.result }))
-      .filter((entry) => entry.result && (entry.result.thumbBlobPath || entry.result.blobPath));
+      .filter((entry) => entry.result && (entry.result.thumbBlobPath || entry.result.blobPath || entry.result.originalBlobPath));
     if (!requests.length) return;
 
-    const blobPaths = requests.map((entry) => entry.result!.thumbBlobPath || entry.result!.blobPath!).filter(Boolean);
+    const blobPaths = Array.from(
+      new Set(
+        requests.flatMap((entry) =>
+          [entry.result!.blobPath, entry.result!.thumbBlobPath, entry.result!.originalBlobPath].filter(Boolean) as string[]
+        )
+      )
+    );
     const headers = await getScopedAuthHeaders({ includeContentTypeJson: true });
     const res = await fetch(`${API_URL}/api/v1/jobs/batch-signed-url`, {
       method: 'POST',
@@ -451,13 +457,21 @@ export const useJobStore = create<JobStore>((set, get) => ({
     set((prev) => {
       const updatedJobs = { ...prev.jobs };
       for (const { jobId, result } of requests) {
-        const path = result!.thumbBlobPath || result!.blobPath;
-        const signed = byPath.get(path as string);
-        if (!signed || !updatedJobs[jobId]?.result) continue;
+        const current = updatedJobs[jobId]?.result;
+        if (!result || !current) continue;
+
+        const signedMain = result.blobPath ? byPath.get(result.blobPath) : undefined;
+        const signedThumb = result.thumbBlobPath ? byPath.get(result.thumbBlobPath) : undefined;
+        const signedOriginal = result.originalBlobPath ? byPath.get(result.originalBlobPath) : undefined;
+
         updatedJobs[jobId].result = {
-          ...updatedJobs[jobId].result!,
-          thumbUrl: signed.url,
-          thumbUrlExpiresAt: signed.expires_at,
+          ...current,
+          url: signedMain?.url || current.url,
+          urlExpiresAt: signedMain?.expires_at || current.urlExpiresAt,
+          thumbUrl: signedThumb?.url || current.thumbUrl,
+          thumbUrlExpiresAt: signedThumb?.expires_at || current.thumbUrlExpiresAt,
+          originalUrl: signedOriginal?.url || current.originalUrl,
+          originalUrlExpiresAt: signedOriginal?.expires_at || current.originalUrlExpiresAt,
         };
       }
       return { jobs: updatedJobs };

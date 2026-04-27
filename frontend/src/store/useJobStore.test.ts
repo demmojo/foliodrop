@@ -459,7 +459,7 @@ describe('useJobStore', () => {
       vi.restoreAllMocks();
     });
 
-    it('refreshResultUrls should update thumbnail URL and expiry', async () => {
+    it('refreshResultUrls should update signed URLs for main/thumb/original assets', async () => {
       authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
       useJobStore.setState({
         jobs: {
@@ -471,8 +471,10 @@ describe('useJobStore', () => {
               id: 'job-refresh',
               url: 'old-url',
               thumbUrl: 'old-thumb',
+              originalUrl: 'old-original',
               blobPath: 'session/hdr.jpg',
               thumbBlobPath: 'session/thumb.jpg',
+              originalBlobPath: 'session/original.jpg',
               sceneName: 'Kitchen',
               status: 'READY',
             },
@@ -484,7 +486,11 @@ describe('useJobStore', () => {
           ok: true,
           json: () =>
             Promise.resolve({
-              urls: [{ path: 'session/thumb.jpg', url: 'new-thumb', expires_at: 999999 }],
+              urls: [
+                { path: 'session/hdr.jpg', url: 'new-main', expires_at: 999991 },
+                { path: 'session/thumb.jpg', url: 'new-thumb', expires_at: 999999 },
+                { path: 'session/original.jpg', url: 'new-original', expires_at: 999992 },
+              ],
             }),
         })
       );
@@ -492,8 +498,12 @@ describe('useJobStore', () => {
       await useJobStore.getState().refreshResultUrls(['job-refresh']);
 
       const result = useJobStore.getState().jobs['job-refresh'].result;
+      expect(result?.url).toBe('new-main');
+      expect(result?.urlExpiresAt).toBe(999991);
       expect(result?.thumbUrl).toBe('new-thumb');
       expect(result?.thumbUrlExpiresAt).toBe(999999);
+      expect(result?.originalUrl).toBe('new-original');
+      expect(result?.originalUrlExpiresAt).toBe(999992);
     });
 
     it('startPolling and stopPolling manage a single interval', () => {
