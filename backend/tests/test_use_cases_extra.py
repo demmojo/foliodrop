@@ -372,6 +372,7 @@ def test_finalize_job_reuses_idempotent_group_job():
 
 
 @pytest.mark.asyncio
+@patch.dict(os.environ, {"ENABLE_GROUP_CACHE": "1"})
 async def test_process_hdr_cache_hit_skips_pipeline():
     event_publisher = FakeEventPublisher()
     task_queue = FakeTaskQueue()
@@ -401,6 +402,7 @@ async def test_process_hdr_cache_hit_skips_pipeline():
 
 
 @pytest.mark.asyncio
+@patch.dict(os.environ, {"ENABLE_GROUP_CACHE": "1"})
 async def test_process_hdr_cache_hit_without_job_row():
     event_publisher = FakeEventPublisher()
     task_queue = FakeTaskQueue()
@@ -422,6 +424,33 @@ async def test_process_hdr_cache_hit_without_job_row():
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
     out = await use_case.execute("ag", "no_such_job", "session", "Living", ["a.jpg", "b.jpg"])
     assert out["room"] == "Living"
+
+
+@pytest.mark.asyncio
+async def test_process_hdr_ignores_cache_when_disabled():
+    event_publisher = FakeEventPublisher()
+    task_queue = FakeTaskQueue()
+    storage = FakeBlobStorage()
+    db = FakeDatabase()
+    img = np.zeros((10, 10, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".jpg", img)
+    fake_bytes = encoded.tobytes()
+    storage.download_blobs = lambda s, f: [fake_bytes, fake_bytes]
+    job_id = "cache_disabled_job"
+    db.save_job(job_id, "session", "PENDING", "key_cache_disabled")
+    db.get_cached_group = MagicMock(
+        return_value={
+            "room": "Cached",
+            "status": "COMPLETED",
+            "blob_path": "cached/hdr.jpg",
+            "thumb_blob_path": "cached/thumb.webp",
+            "original_blob_path": "cached/raw.jpg",
+        }
+    )
+    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
+    out = await use_case.execute("ag", job_id, "session", "Living", ["a.jpg", "b.jpg"])
+    assert out["room"] == "Living"
+    assert out["blob_path"].startswith("session/")
 
 
 @pytest.mark.asyncio

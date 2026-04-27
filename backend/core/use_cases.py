@@ -1,4 +1,5 @@
 import asyncio
+import os
 import uuid
 import numpy as np
 import logging
@@ -118,15 +119,17 @@ class ProcessHdrGroupUseCase:
                 hasher.update(b)
             group_hash = hasher.hexdigest()
             
-            cached_result = self.db.get_cached_group(group_hash)
-            if cached_result:
-                logger.info(f"Cache hit for group_hash {group_hash} in job {job_id}")
-                cached_result["room"] = room
-                job = self.db.get_job(job_id)
-                if job:
-                    self.db.save_job(job_id, session_id, "COMPLETED", job.get("idempotency_key", ""), result=cached_result)
-                await self.event_publisher.publish_progress(session_id, room, "COMPLETED")
-                return cached_result
+            cache_enabled = os.environ.get("ENABLE_GROUP_CACHE", "").lower() in {"1", "true", "yes", "on"}
+            if cache_enabled:
+                cached_result = self.db.get_cached_group(group_hash)
+                if cached_result:
+                    logger.info(f"Cache hit for group_hash {group_hash} in job {job_id}")
+                    cached_result["room"] = room
+                    job = self.db.get_job(job_id)
+                    if job:
+                        self.db.save_job(job_id, session_id, "COMPLETED", job.get("idempotency_key", ""), result=cached_result)
+                    await self.event_publisher.publish_progress(session_id, room, "COMPLETED")
+                    return cached_result
             
             # 1. Deterministic OpenCV Pipeline with Pre-Merge Downsampling to 2K (2048px)
             import cv2
@@ -447,7 +450,7 @@ class ProcessHdrGroupUseCase:
                 "agency_id": agency_id,
             }
 
-            if not is_flagged and status == "COMPLETED":
+            if cache_enabled and not is_flagged and status == "COMPLETED":
                 self.db.save_cached_group(group_hash, result_payload)
 
             job = self.db.get_job(job_id)
