@@ -102,6 +102,10 @@ export default function HowItWorksPage() {
               <span className="text-sm text-muted">Original brackets are downsampled to an optimized 2K resolution (2048px), the perfect size for MLS, ensuring blazing fast processing without freezing server resources.</span>
             </div>
             <div className="border-l-2 border-border pl-4 py-1">
+              <strong className="block text-foreground mb-1">Composition &amp; Framing Pre-flight</strong>
+              <span className="text-sm text-muted">Before merging, Folio matches each bracket against the median-brightness reference using SIFT features and a near-identity homography check. If a photo turns out to be a different scene, a different aspect ratio, or framed too far off (panned/zoomed away), the job is flagged instead of merged—no smeared output. Pixel-perfect alignment within a matched scene is then handled by AlignMTB.</span>
+            </div>
+            <div className="border-l-2 border-border pl-4 py-1">
               <strong className="block text-foreground mb-1">Halo-Free Contrast (OpenCV Base)</strong>
               <span className="text-sm text-muted">Corrects micro-jitter, applies custom exposure fusion prioritizing dark brackets for exterior views, and utilizes CLAHE in LAB color space to boost brightness without glowing halos.</span>
             </div>

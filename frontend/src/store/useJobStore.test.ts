@@ -129,14 +129,60 @@ describe('useJobStore', () => {
       await useJobStore.getState().uploadTrainingPair(brackets, final);
     });
 
-    it('uploadTrainingPair should log error on failure', async () => {
+    it('uploadTrainingPair should throw a structured error on 422', async () => {
       authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
-      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: false }));
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          json: () =>
+            Promise.resolve({
+              detail: {
+                message: 'final edit does not appear to be the same scene',
+                report: { composition_consistent: false },
+              },
+            }),
+        })
+      );
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await useJobStore.getState().uploadTrainingPair([], new File([''], 'final.jpg'));
+      await expect(
+        useJobStore.getState().uploadTrainingPair([], new File([''], 'final.jpg'))
+      ).rejects.toThrow('final edit does not appear to be the same scene');
 
-      expect(consoleSpy).toHaveBeenCalledWith("Failed to upload training pair");
+      consoleSpy.mockRestore();
+    });
+
+    it('uploadTrainingPair should fall back to a default error when JSON parsing fails', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          json: () => Promise.reject(new Error('not json')),
+        })
+      );
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        useJobStore.getState().uploadTrainingPair([], new File([''], 'final.jpg'))
+      ).rejects.toThrow('Failed to upload training pair');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('uploadTrainingPair should surface plain string detail when present', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ detail: 'too many brackets' }),
+        })
+      );
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        useJobStore.getState().uploadTrainingPair([], new File([''], 'final.jpg'))
+      ).rejects.toThrow('too many brackets');
+
       consoleSpy.mockRestore();
     });
 

@@ -83,6 +83,59 @@ def test_upload_training_pair(client):
     assert len(data["bracket_paths"]) == 2
     assert "final.jpg" in data["final_path"]
 
+
+def _scene_rectangles_jpg(seed: int, w: int = 600, h: int = 400) -> bytes:
+    import numpy as np
+    import cv2
+    rng = np.random.default_rng(seed)
+    img = np.full((h, w, 3), 220, dtype=np.uint8)
+    cv2.rectangle(img, (0, 0), (w, h // 3), (180, 170, 160), -1)
+    cv2.rectangle(img, (0, 2 * h // 3), (w, h), (140, 130, 120), -1)
+    for _ in range(20):
+        x = int(rng.integers(0, w - 30))
+        y = int(rng.integers(0, h - 30))
+        size = int(rng.integers(15, 60))
+        color = tuple(int(c) for c in rng.integers(0, 80, size=3))
+        cv2.rectangle(img, (x, y), (x + size, y + size), color, -1)
+    cv2.putText(img, f"ROOM_{seed}", (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 0, 0), 3)
+    _, encoded = cv2.imencode(".jpg", img)
+    return encoded.tobytes()
+
+
+def _scene_circles_jpg(seed: int, w: int = 600, h: int = 400) -> bytes:
+    import numpy as np
+    import cv2
+    rng = np.random.default_rng(seed)
+    img = np.full((h, w, 3), 50, dtype=np.uint8)
+    for _ in range(60):
+        x = int(rng.integers(0, w))
+        y = int(rng.integers(0, h))
+        r = int(rng.integers(5, 30))
+        color = tuple(int(c) for c in rng.integers(150, 255, size=3))
+        cv2.circle(img, (x, y), r, color, -1)
+    _, encoded = cv2.imencode(".jpg", img)
+    return encoded.tobytes()
+
+
+def test_upload_training_pair_rejects_mismatched_scenes(client):
+    c, _db, _storage = client
+    bracket_a = _scene_rectangles_jpg(seed=1)
+    bracket_b = _scene_rectangles_jpg(seed=1)
+    final_unrelated = _scene_circles_jpg(seed=99)
+
+    response = c.post(
+        "/api/v1/training/upload",
+        files=[
+            ("brackets", ("b1.jpg", bracket_a, "image/jpeg")),
+            ("brackets", ("b2.jpg", bracket_b, "image/jpeg")),
+            ("final_edit", ("final.jpg", final_unrelated, "image/jpeg")),
+        ],
+    )
+    assert response.status_code == 422
+    body = response.json()
+    assert "report" in body["detail"]
+    assert body["detail"]["report"]["composition_consistent"] is False
+
 def test_override_job_image(client):
     c, db, storage = client
     image_bytes = _valid_image_bytes()

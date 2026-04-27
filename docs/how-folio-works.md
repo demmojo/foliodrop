@@ -26,6 +26,7 @@
 
 - **Bracket Caching (Short-Circuit):** Before processing begins, Folio hashes the incoming brackets. If identical photos have been processed previously, the system serves the HDR result instantly from cache, saving compute time and eliminating wait periods.
 - **Pre-Merge Optimization:** Original brackets are downsampled to an optimized 2K resolution (2048px), the perfect size for Multiple Listing Services (MLS), ensuring blazing fast processing without freezing server resources.
+- **Composition & Framing Pre-flight:** Before any merge happens, every bracket is matched against the median-brightness reference using SIFT keypoints, MAGSAC++ inlier counting, and a near-identity homography check. Three things must be true: the photos must depict the same scene (composition), share the same aspect ratio and resolution (framing), and produce a near-identity warp (no major pan, zoom, or rotation). If any of those checks fail, the job is flagged with a clear reason instead of producing a smeared output. Training-pair uploads use the same gate—including a check that the user's final edit matches the brackets—so corrupt training data is rejected at the API boundary. Pixel-perfect alignment within a verified scene is then enforced by AlignMTB.
 - **Halo-Free Contrast (OpenCV Base):** 
   - *Alignment:* Corrects micro-jitter and camera shake between handheld brackets.
   - *Exposure Fusion:* Custom weights prioritize dark brackets to ensure crisp exterior views out of windows.

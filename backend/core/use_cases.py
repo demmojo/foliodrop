@@ -120,8 +120,6 @@ class ProcessHdrGroupUseCase:
             
             cached_result = self.db.get_cached_group(group_hash)
             if cached_result:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.info(f"Cache hit for group_hash {group_hash} in job {job_id}")
                 cached_result["room"] = room
                 job = self.db.get_job(job_id)
@@ -154,6 +152,88 @@ class ProcessHdrGroupUseCase:
             # Free raw arrays
             del np_images
             gc.collect()
+
+            # Composition + framing guard: refuse to merge brackets that do not
+            # depict the same scene. AlignMTB cannot save us here -- it would
+            # silently produce a smeared image. We flag the job instead.
+            from backend.core.bracket_consistency import (
+                report_to_payload,
+                validate_bracket_consistency,
+            )
+
+            consistency_report = await asyncio.to_thread(
+                validate_bracket_consistency, downsampled_images
+            )
+            if not consistency_report.is_consistent:
+                logger.warning(
+                    "Bracket consistency check failed for job %s: %s",
+                    job_id,
+                    consistency_report.reason,
+                )
+                await self.event_publisher.publish_progress(session_id, room, "FLAGGED")
+                # Use the median-brightness bracket as the best fallback we can show.
+                fallback_idx = sorted(
+                    range(len(downsampled_images)),
+                    key=lambda i: downsampled_images[i].mean(),
+                )[len(downsampled_images) // 2]
+                fallback_img = downsampled_images[fallback_idx]
+                _, encoded_fallback = cv2.imencode(
+                    ".jpg", fallback_img, [cv2.IMWRITE_JPEG_QUALITY, 90]
+                )
+                fallback_bytes = encoded_fallback.tobytes()
+
+                h, w = fallback_img.shape[:2]
+                thumb_scale = 800 / max(h, w)
+                thumb_img = cv2.resize(
+                    fallback_img,
+                    (int(w * thumb_scale), int(h * thumb_scale)),
+                    interpolation=cv2.INTER_AREA,
+                )
+                _, encoded_thumb = cv2.imencode(
+                    ".webp", thumb_img, [cv2.IMWRITE_WEBP_QUALITY, 80]
+                )
+                fallback_thumb_bytes = encoded_thumb.tobytes()
+
+                final_filename = f"hdr_{room.replace(' ', '_')}_{uuid.uuid4().hex[:8]}.jpg"
+                thumb_filename = f"thumb_{room.replace(' ', '_')}_{uuid.uuid4().hex[:8]}.webp"
+                before_filename = f"raw_{room.replace(' ', '_')}_{uuid.uuid4().hex[:8]}.jpg"
+
+                final_path = await asyncio.to_thread(
+                    self.storage.upload_blob, session_id, final_filename, fallback_bytes, "image/jpeg"
+                )
+                thumb_path = await asyncio.to_thread(
+                    self.storage.upload_blob, session_id, thumb_filename, fallback_thumb_bytes, "image/webp"
+                )
+                original_path = await asyncio.to_thread(
+                    self.storage.upload_blob, session_id, before_filename, fallback_bytes, "image/jpeg"
+                )
+
+                result_payload = {
+                    "room": room,
+                    "status": "FLAGGED",
+                    "blob_path": final_path,
+                    "thumb_blob_path": thumb_path,
+                    "original_blob_path": original_path,
+                    "bracket_paths": [f"{session_id}/{p}" for p in photos],
+                    "isFlagged": True,
+                    "vlmReport": {
+                        "reason": consistency_report.reason
+                        or "Brackets are not of the same scene/framing.",
+                        "consistency": report_to_payload(consistency_report),
+                    },
+                    "telemetry": [{"consistency": report_to_payload(consistency_report)}],
+                    "agency_id": agency_id,
+                }
+                job = self.db.get_job(job_id)
+                if job:
+                    self.db.save_job(
+                        job_id,
+                        session_id,
+                        "FLAGGED",
+                        job.get("idempotency_key", ""),
+                        result=result_payload,
+                    )
+                return result_payload
 
             # Keep darkest bracket for deterministic window highlight recovery.
             darkest_bracket = min(downsampled_images, key=lambda x: x.mean())
@@ -297,8 +377,6 @@ class ProcessHdrGroupUseCase:
                                 }
                                     
                         except Exception as e:
-                            import logging
-                            logger = logging.getLogger(__name__)
                             logger.error(f"Generation error on attempt {attempt}: {e}")
                             telemetry.append({"attempt": attempt, "error": str(e)})
                             if attempt == max_retries:
@@ -311,8 +389,6 @@ class ProcessHdrGroupUseCase:
                         try:
                             await asyncio.to_thread(client.files.delete, name=f.name)
                         except Exception as e:
-                            import logging
-                            logger = logging.getLogger(__name__)
                             logger.warning(f"Failed to delete Gemini file {f.name}: {e}")
             else:
                 # Mock path for testing
@@ -397,6 +473,14 @@ class UploadStyleImageUseCase:
             
         return {"status": "success", "blob_path": blob_path, "evicted_count": len(deleted_paths)}
 
+class TrainingPairConsistencyError(Exception):
+    """Raised when a training pair's brackets/final edit do not match scene/framing."""
+
+    def __init__(self, message: str, report: dict):
+        super().__init__(message)
+        self.report = report
+
+
 class UploadTrainingPairUseCase:
     def __init__(self, storage: IBlobStorage, db: IDatabase):
         self.storage = storage
@@ -405,7 +489,21 @@ class UploadTrainingPairUseCase:
     def execute(self, agency_id: str, brackets: List[tuple[str, bytes, str]], final_edit: tuple[str, bytes, str]) -> dict:
         import uuid
         import re
-        
+        from backend.core.bracket_consistency import (
+            report_to_payload,
+            validate_bracket_consistency,
+        )
+        from backend.core.image_decoding import decode_image
+
+        bracket_imgs = [decode_image(b[1]) for b in brackets]
+        final_img = decode_image(final_edit[1])
+        report = validate_bracket_consistency(bracket_imgs, final_edit=final_img)
+        if not report.is_consistent:
+            raise TrainingPairConsistencyError(
+                report.reason or "Training pair photos must be of the same scene and framing.",
+                report_to_payload(report),
+            )
+
         batch_id = uuid.uuid4().hex[:8]
         bracket_paths = []
         for file_name, file_data, content_type in brackets:

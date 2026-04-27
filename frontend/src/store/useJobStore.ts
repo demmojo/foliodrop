@@ -212,22 +212,31 @@ export const useJobStore = create<JobStore>((set, get) => ({
   },
 
   uploadTrainingPair: async (brackets: File[], finalEdit: File) => {
-    try {
-      const headers = await getScopedAuthHeaders();
+    const headers = await getScopedAuthHeaders();
 
-      const formData = new FormData();
-      brackets.forEach(b => formData.append('brackets', b));
-      formData.append('final_edit', finalEdit);
-      const res = await fetch(`${API_URL}/api/v1/training/upload`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-      if (!res.ok) {
-        console.error("Failed to upload training pair");
+    const formData = new FormData();
+    brackets.forEach(b => formData.append('brackets', b));
+    formData.append('final_edit', finalEdit);
+    const res = await fetch(`${API_URL}/api/v1/training/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      let message = 'Failed to upload training pair';
+      try {
+        const body = await res.json();
+        const detail = body?.detail;
+        if (typeof detail === 'string') {
+          message = detail;
+        } else if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+          message = detail.message;
+        }
+      } catch {
+        /* fall through with default message */
       }
-    } catch (e) {
-      console.error("Failed to upload training pair", e);
+      console.error(message);
+      throw new Error(message);
     }
   },
 

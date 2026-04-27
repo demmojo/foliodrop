@@ -10,6 +10,7 @@ export const AgencySettings: React.FC = () => {
   const [isDeletingStyle, setIsDeletingStyle] = useState<string | null>(null);
   const [failedThumbIds, setFailedThumbIds] = useState<Record<string, true>>({});
   const [retriedThumbIds, setRetriedThumbIds] = useState<Record<string, true>>({});
+  const [trainingError, setTrainingError] = useState<string | null>(null);
   
   const styleInputRef = useRef<HTMLInputElement>(null);
   
@@ -43,10 +44,17 @@ export const AgencySettings: React.FC = () => {
   const handleTrainingSubmit = async () => {
     if (trainingBrackets.length > 0 && trainingFinalEdit) {
       setIsUploadingTraining(true);
-      await uploadTrainingPair(trainingBrackets, trainingFinalEdit);
-      setTrainingBrackets([]);
-      setTrainingFinalEdit(null);
-      setIsUploadingTraining(false);
+      setTrainingError(null);
+      try {
+        await uploadTrainingPair(trainingBrackets, trainingFinalEdit);
+        setTrainingBrackets([]);
+        setTrainingFinalEdit(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to upload training pair';
+        setTrainingError(message);
+      } finally {
+        setIsUploadingTraining(false);
+      }
     }
   };
 
@@ -149,6 +157,7 @@ export const AgencySettings: React.FC = () => {
                 onChange={(e) => {
                   if (e.target.files) {
                     setTrainingBrackets(Array.from(e.target.files));
+                    setTrainingError(null);
                   }
                 }}
               />
@@ -169,6 +178,7 @@ export const AgencySettings: React.FC = () => {
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     setTrainingFinalEdit(e.target.files[0]);
+                    setTrainingError(null);
                   }
                 }}
               />
@@ -187,6 +197,14 @@ export const AgencySettings: React.FC = () => {
           >
             {isUploadingTraining ? 'Uploading...' : 'Submit Training Pair'}
           </button>
+          {trainingError && (
+            <p
+              role="alert"
+              className="mt-2 text-xs text-red-600"
+            >
+              {trainingError}
+            </p>
+          )}
         </div>
       </section>
     </div>

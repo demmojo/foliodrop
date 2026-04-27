@@ -17,7 +17,8 @@ from backend.core.use_cases import (
     ProcessHdrGroupUseCase,
     UploadStyleImageUseCase,
     UploadTrainingPairUseCase,
-    OverrideJobImageUseCase
+    OverrideJobImageUseCase,
+    TrainingPairConsistencyError,
 )
 
 logger = logging.getLogger(__name__)
@@ -504,8 +505,14 @@ async def upload_training_pair(
     final_data = await final_edit.read()
     _validate_image_payload(final_edit.filename, final_data)
     final_tuple = (final_edit.filename, final_data, final_edit.content_type)
-    
-    result = use_case.execute(agency_id, bracket_data, final_tuple)
+
+    try:
+        result = use_case.execute(agency_id, bracket_data, final_tuple)
+    except TrainingPairConsistencyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"message": str(exc), "report": exc.report},
+        )
     return result
 
 @app.post("/api/v1/jobs/{job_id}/override")

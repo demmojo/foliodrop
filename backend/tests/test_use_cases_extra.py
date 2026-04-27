@@ -636,3 +636,78 @@ async def test_process_hdr_skips_incomplete_training_pair(
     use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
     await use_case.execute("agX", job_id, "session", "R", ["a.jpg", "b.jpg"])
     assert not mock_gen.call_args.kwargs.get("training_pairs")
+
+
+def _scene_rectangles_bytes(seed: int, w: int = 600, h: int = 400) -> bytes:
+    rng = np.random.default_rng(seed)
+    img = np.full((h, w, 3), 220, dtype=np.uint8)
+    cv2.rectangle(img, (0, 0), (w, h // 3), (180, 170, 160), -1)
+    cv2.rectangle(img, (0, 2 * h // 3), (w, h), (140, 130, 120), -1)
+    for _ in range(20):
+        x = int(rng.integers(0, w - 30))
+        y = int(rng.integers(0, h - 30))
+        size = int(rng.integers(15, 60))
+        color = tuple(int(c) for c in rng.integers(0, 80, size=3))
+        cv2.rectangle(img, (x, y), (x + size, y + size), color, -1)
+    cv2.putText(img, f"ROOM_{seed}", (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 0, 0), 3)
+    _, encoded = cv2.imencode(".jpg", img)
+    return encoded.tobytes()
+
+
+def _scene_circles_bytes(seed: int, w: int = 600, h: int = 400) -> bytes:
+    rng = np.random.default_rng(seed)
+    img = np.full((h, w, 3), 50, dtype=np.uint8)
+    for _ in range(60):
+        x = int(rng.integers(0, w))
+        y = int(rng.integers(0, h))
+        r = int(rng.integers(5, 30))
+        color = tuple(int(c) for c in rng.integers(150, 255, size=3))
+        cv2.circle(img, (x, y), r, color, -1)
+    _, encoded = cv2.imencode(".jpg", img)
+    return encoded.tobytes()
+
+
+@pytest.mark.asyncio
+async def test_process_hdr_flags_job_when_brackets_are_different_scenes():
+    event_publisher = FakeEventPublisher()
+    task_queue = FakeTaskQueue()
+    storage = FakeBlobStorage()
+    db = FakeDatabase()
+    job_id = "mismatch_job"
+    db.save_job(job_id, "sess_mismatch", "PENDING", "k_mismatch")
+
+    bytes_room_a = _scene_rectangles_bytes(seed=1)
+    bytes_room_b = _scene_circles_bytes(seed=99)
+    storage.download_blobs = lambda s, f: [bytes_room_a, bytes_room_b]
+
+    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
+    result = await use_case.execute(
+        "agency_mismatch", job_id, "sess_mismatch", "Living Room", ["a.jpg", "b.jpg"]
+    )
+
+    assert result["status"] == "FLAGGED"
+    assert result["isFlagged"] is True
+    assert "consistency" in result["vlmReport"]
+    assert result["vlmReport"]["consistency"]["composition_consistent"] is False
+    saved = db.get_job(job_id)
+    assert saved["status"] == "FLAGGED"
+    assert saved["result"]["agency_id"] == "agency_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_process_hdr_consistency_flag_handles_missing_job_record():
+    event_publisher = FakeEventPublisher()
+    task_queue = FakeTaskQueue()
+    storage = FakeBlobStorage()
+    db = FakeDatabase()
+    bytes_room_a = _scene_rectangles_bytes(seed=2)
+    bytes_room_b = _scene_circles_bytes(seed=77)
+    storage.download_blobs = lambda s, f: [bytes_room_a, bytes_room_b]
+    use_case = ProcessHdrGroupUseCase(event_publisher, task_queue, storage, db)
+
+    result = await use_case.execute(
+        "agency_no_job", "missing_job_id", "sess_x", "Bedroom", ["a.jpg", "b.jpg"]
+    )
+
+    assert result["status"] == "FLAGGED"
+    assert db.get_job("missing_job_id") is None
