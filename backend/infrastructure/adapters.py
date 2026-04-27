@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 import datetime
+import base64
 from typing import List, Dict, Any, AsyncGenerator, Optional
 from backend.core.ports import IDatabase, IBlobStorage, ITaskQueue, IEventPublisher, IProgressSubscriber
 import firebase_admin
@@ -56,6 +57,20 @@ class FirestoreAdapter(IDatabase):
             job_data["error"] = error
         
         self.db.collection("jobs").document(job_id).set(job_data, merge=True)
+        resolved_agency = agency_id or (result or {}).get("agency_id")
+        if resolved_agency and result:
+            for path in (
+                result.get("blob_path"),
+                result.get("thumb_blob_path"),
+                result.get("original_blob_path"),
+            ):
+                if not path:
+                    continue
+                index_id = base64.urlsafe_b64encode(path.encode("utf-8")).decode("ascii")
+                self.db.collection("blob_index").document(index_id).set(
+                    {"blob_path": path, "agency_id": resolved_agency, "job_id": job_id},
+                    merge=True,
+                )
 
     def get_job(self, job_id: str) -> Optional[dict]:
         doc = self.db.collection("jobs").document(job_id).get()
@@ -88,6 +103,12 @@ class FirestoreAdapter(IDatabase):
     def is_blob_path_owned_by_agency(self, blob_path: str, agency_id: str) -> bool:
         # Explicit agency-scoped prefixes are safe to sign for the owner.
         if blob_path.startswith(f"style_profiles/{agency_id}/") or blob_path.startswith(f"training_pairs/{agency_id}/"):
+            return True
+
+        # Fast path through dedicated index collection.
+        index_id = base64.urlsafe_b64encode(blob_path.encode("utf-8")).decode("ascii")
+        doc = self.db.collection("blob_index").document(index_id).get()
+        if doc.exists and (doc.to_dict() or {}).get("agency_id") == agency_id:
             return True
 
         # Job outputs are stored by session path. Resolve ownership via job.result fields.

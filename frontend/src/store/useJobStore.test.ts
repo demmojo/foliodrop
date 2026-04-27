@@ -24,6 +24,7 @@ describe('useJobStore', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    useJobStore.getState().stopPolling();
     useJobStore.setState({
       jobs: {},
       activeSessionId: null,
@@ -188,7 +189,12 @@ describe('useJobStore', () => {
 
     it('overrideWithManualEdit should succeed', async () => {
       authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
-      mockFetch.mockImplementationOnce(() => Promise.resolve({ ok: true }));
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ url: 'blob:url', thumb_url: 'blob:url' }),
+        })
+      );
       
       useJobStore.setState({
         jobs: {
@@ -379,7 +385,10 @@ describe('useJobStore', () => {
                 result: {
                   url: 'flagged-url',
                   thumb_url: 'flagged-thumb',
+                  thumb_url_expires_at: 1710000000,
                   original_url: 'flagged-orig',
+                  original_url_expires_at: 1710000000,
+                  url_expires_at: 1710000000,
                   room: 'Bathroom',
                   isFlagged: true,
                   vlmReport: { reason: 'soft fallback' }
@@ -397,7 +406,9 @@ describe('useJobStore', () => {
       expect(job.result?.sceneName).toBe('Bathroom');
       expect(job.result?.url).toBe('flagged-url');
       expect(job.result?.thumbUrl).toBe('flagged-thumb');
+      expect(job.result?.thumbUrlExpiresAt).toBe(1710000000);
       expect(job.result?.originalUrl).toBe('flagged-orig');
+      expect(job.result?.originalUrlExpiresAt).toBe(1710000000);
       expect(job.result?.isFlagged).toBe(true);
 
       vi.restoreAllMocks();
@@ -446,6 +457,58 @@ describe('useJobStore', () => {
       expect(state.jobs['job2'].result?.status).toBe('NEEDS_REVIEW');
       
       vi.restoreAllMocks();
+    });
+
+    it('refreshResultUrls should update thumbnail URL and expiry', async () => {
+      authState.currentUser = { getIdToken: () => Promise.resolve('tok') };
+      useJobStore.setState({
+        jobs: {
+          'job-refresh': {
+            id: 'job-refresh',
+            status: 'READY',
+            nextPollAt: 0,
+            result: {
+              id: 'job-refresh',
+              url: 'old-url',
+              thumbUrl: 'old-thumb',
+              blobPath: 'session/hdr.jpg',
+              thumbBlobPath: 'session/thumb.jpg',
+              sceneName: 'Kitchen',
+              status: 'READY',
+            },
+          },
+        },
+      } as any);
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              urls: [{ path: 'session/thumb.jpg', url: 'new-thumb', expires_at: 999999 }],
+            }),
+        })
+      );
+
+      await useJobStore.getState().refreshResultUrls(['job-refresh']);
+
+      const result = useJobStore.getState().jobs['job-refresh'].result;
+      expect(result?.thumbUrl).toBe('new-thumb');
+      expect(result?.thumbUrlExpiresAt).toBe(999999);
+    });
+
+    it('startPolling and stopPolling manage a single interval', () => {
+      const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+      const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+
+      useJobStore.getState().startPolling();
+      useJobStore.getState().startPolling();
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+
+      useJobStore.getState().stopPolling();
+      expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
     });
 
     it('fetchStyleProfiles should no-op on non-ok response', async () => {

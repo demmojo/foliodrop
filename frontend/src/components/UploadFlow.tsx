@@ -186,12 +186,12 @@ export default function UploadFlow() {
     });
     
     if (files.length === 0) {
-        if (allFiles.length > 0) showToast("RAW processing is currently not supported. Please upload JPEG, PNG, or HEIC files.");
+        if (allFiles.length > 0) showToast(t('raw_not_supported'));
         return;
     }
 
     if (files.length !== allFiles.length) {
-      showToast(`Ignored ${allFiles.length - files.length} unsupported files.`);
+      showToast(t('ignored_unsupported_files').replace('{count}', String(allFiles.length - files.length)));
     }
     
     setFlowState('PARSING');
@@ -207,7 +207,7 @@ export default function UploadFlow() {
       // but without EXIF data we can't reliably group them just by time (due to download/transfer delays).
       // So we use the visual AI fallback instead of blindly chunking by 5.
       if (noExposureData && sorted.length > 5) {
-          showToast("EXIF metadata is missing. Using Visual AI to accurately group your scenes. This may take a moment...");
+          showToast(t('missing_exif_using_visual_ai'));
           
           const thumbnails = await Promise.all(sorted.map(async (meta) => {
               const b64 = await generateThumbnail(meta.file);
@@ -253,7 +253,7 @@ export default function UploadFlow() {
       setFlowState('CONFIRMATION');
     } catch (err) {
       console.error(err);
-      showToast("Failed to parse image metadata.");
+      showToast(t('failed_parse_metadata'));
       setFlowState('IDLE');
     }
   };
@@ -271,7 +271,11 @@ export default function UploadFlow() {
   const processUploadBatch = async () => {
     const estScenes = photoGroups.length;
     if (quota && quota.used + estScenes > quota.limit) {
-      showToast(`Quota Exceeded! You have ${quota.limit - quota.used} runs remaining, but are trying to process ${estScenes} scenes.`);
+      showToast(
+        t('quota_exceeded_message')
+          .replace('{remaining}', String(quota.limit - quota.used))
+          .replace('{scenes}', String(estScenes))
+      );
       return;
     }
 
@@ -280,7 +284,7 @@ export default function UploadFlow() {
 
     try {
       if (sessionCode.length < 6) {
-         showToast("Room code must be at least 3 characters.");
+         showToast(t('room_code_min_chars'));
          setFlowState('IDLE');
          return;
       }
@@ -315,6 +319,7 @@ export default function UploadFlow() {
 
       // Concurrency limit to prevent network saturation and timeouts
       const limit = pLimit(4);
+      let failedUploads = 0;
       const uploadPromises = filePayloads.map((fp, idx) => limit(async () => {
          const uploadData = urlData.urls[idx];
          if (uploadData && uploadData.url.startsWith('http')) {
@@ -326,14 +331,15 @@ export default function UploadFlow() {
          }
       })).map(p => p.catch(err => {
          console.error("File upload error:", err);
+         failedUploads += 1;
          setUploadProgress(prev => ({ ...prev, failed: prev.failed + 1 }));
       }));
 
       await Promise.all(uploadPromises);
 
       // Check if we had too many failures
-      if (uploadProgress.failed > 0) {
-         showToast(`${uploadProgress.failed} files failed to upload. Processing the rest.`);
+      if (failedUploads > 0) {
+         showToast(t('files_failed_upload').replace('{count}', String(failedUploads)));
       }
 
       setFlowState('PROCESSING');
@@ -378,7 +384,7 @@ export default function UploadFlow() {
 
     } catch (err) {
       console.error(err);
-      showToast("Pipeline initialization failed. Please try again.");
+      showToast(t('pipeline_init_failed'));
       setFlowState('IDLE');
     }
   };
@@ -420,7 +426,7 @@ export default function UploadFlow() {
   const handleFinalExport = async () => {
       const hasUnreviewed = processedPhotos.some(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED');
       if (hasUnreviewed) {
-          const proceed = window.confirm("You have unreviewed images in the queue. Exporting will discard them. Proceed?");
+          const proceed = window.confirm(t('confirm_export_with_unreviewed'));
           if (!proceed) return;
       }
       
@@ -428,11 +434,11 @@ export default function UploadFlow() {
       const exportCount = readyPhotos.length;
       
       if (exportCount === 0) {
-          showToast("No images ready for export.");
+          showToast(t('no_images_ready_for_export'));
           return;
       }
 
-      showToast(`Preparing ${exportCount} images for export...`);
+      showToast(t('preparing_images_for_export').replace('{count}', String(exportCount)));
       
       try {
           // Fetch all images
@@ -476,13 +482,13 @@ export default function UploadFlow() {
           if (navigator.share && navigator.canShare) {
               const shareData = {
                   files: downloadedFiles,
-                  title: 'Folio Export'
+                  title: t('folio_export_title')
               };
               
               if (navigator.canShare(shareData)) {
                   try {
                       await navigator.share(shareData);
-                      showToast("Export successful!");
+                      showToast(t('export_successful'));
                       return; // Exit early if share succeeds
                   } catch (err: unknown) {
                       // If user aborted the share sheet, do not fallback to ZIP. Just exit.
@@ -497,7 +503,7 @@ export default function UploadFlow() {
           }
           
           // Fallback to ZIP
-          showToast("Zipping images for download...");
+          showToast(t('zipping_images'));
           const zip = new JSZip();
           const folder = zip.folder("folio-export");
           
@@ -509,10 +515,10 @@ export default function UploadFlow() {
           
           const content = await zip.generateAsync({ type: "blob" });
           saveAs(content, `folio_export_${new Date().getTime()}.zip`);
-          showToast("Download complete!");
+          showToast(t('download_complete'));
       } catch (err) {
           console.error("Export failed", err);
-          showToast("Failed to export images.");
+          showToast(t('failed_export_images'));
       }
   };
 
@@ -526,9 +532,9 @@ export default function UploadFlow() {
             <div className="w-16 h-16 rounded-full bg-foreground/5 flex items-center justify-center mb-6">
               <CheckCircle2 className="w-8 h-8 text-emerald-500" />
             </div>
-            <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2">Welcome Back</h2>
+            <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2">{t('welcome_back')}</h2>
             <p className="text-muted text-sm leading-relaxed mb-8">
-              We found your previous session <strong>{pendingSessionCode}</strong>. Do you want to continue where you left off or start a new session?
+              {t('resume_prompt_prefix')} <strong>{pendingSessionCode}</strong>. {t('resume_prompt_suffix')}
             </p>
             <div className="flex flex-col gap-3 w-full">
               <button
@@ -539,7 +545,7 @@ export default function UploadFlow() {
                 }}
                 className="w-full py-3 bg-foreground text-background rounded-full font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all"
               >
-                Continue in {pendingSessionCode}
+                {t('continue_in_session').replace('{session}', pendingSessionCode)}
               </button>
               <button
               onClick={() => {
@@ -553,7 +559,7 @@ export default function UploadFlow() {
               }}
               className="w-full py-3 bg-surface border border-border text-foreground rounded-full font-semibold hover:bg-muted/5 active:scale-95 transition-all"
             >
-              Start a New Session
+              {t('start_new_session')}
             </button>
             </div>
           </div>
@@ -640,7 +646,7 @@ export default function UploadFlow() {
                 }}
                 onBlur={() => {
                   if (!sessionCode || sessionCode.length < 3) {
-                    setSessionCodeError("Must be at least 3 characters.");
+                    setSessionCodeError(t('must_be_at_least_3_chars'));
                   }
                 }}
                 placeholder={t('session_id')}
@@ -664,7 +670,7 @@ export default function UploadFlow() {
             </div>
             {sessionCodeError && <p className="text-xs text-warning mt-1" data-testid="session-code-error">{sessionCodeError}</p>}
             <p className="text-[11px] text-muted text-center max-w-[300px] mt-1">
-              Start an upload with this code, or enter an existing one to resume. Session retention depends on backend policy.
+              {t('session_help_text')}
             </p>
 
             <button
@@ -681,12 +687,12 @@ export default function UploadFlow() {
               }}
               className="text-xs text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors mt-2"
             >
-              Start a new room
+              {t('start_new_room')}
             </button>
 
             {recentSessions.length > 0 && (
               <div className="w-full mt-6 flex flex-col gap-2">
-                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Recent Sessions</h4>
+                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">{t('recent_sessions')}</h4>
                 <div className="flex flex-col gap-2 relative">
                   {recentSessions.slice(0, showAllSessions ? recentSessions.length : 2).map((session, i) => (
                     <button
@@ -706,7 +712,7 @@ export default function UploadFlow() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-medium bg-foreground/5 text-foreground px-2 py-1 rounded border border-border/50">
-                          {session.count} {session.count === 1 ? 'scene' : 'scenes'}
+                          {session.count} {session.count === 1 ? t('scene_singular') : t('scene_plural')}
                         </span>
                         <div className="w-6 h-6 rounded-full bg-foreground/5 border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <span className="text-foreground text-xs font-medium">→</span>
@@ -726,7 +732,7 @@ export default function UploadFlow() {
                     onClick={() => setShowAllSessions(true)}
                     className="text-xs text-muted hover:text-foreground font-medium mt-2 transition-colors py-1 z-30"
                   >
-                    Show {recentSessions.length - 2} more sessions
+                    {t('show_more_sessions').replace('{count}', String(recentSessions.length - 2))}
                   </button>
                 )}
               </div>
@@ -736,18 +742,18 @@ export default function UploadFlow() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 max-w-4xl text-center px-4">
              <div className="flex flex-col items-center gap-3">
                 <Layers className="w-6 h-6 text-muted" />
-                <h3 className="text-sm font-semibold text-foreground">Intelligent Grouping</h3>
-                <p className="text-xs text-muted leading-relaxed">We read the capture time in your photos&apos; EXIF data to automatically group 3, 5, or 7 bracket sets into scenes.</p>
+                <h3 className="text-sm font-semibold text-foreground">{t('intelligent_grouping_title')}</h3>
+                <p className="text-xs text-muted leading-relaxed">{t('intelligent_grouping_body')}</p>
              </div>
              <div className="flex flex-col items-center gap-3">
                 <div className="w-6 h-6 rounded flex items-center justify-center border border-muted text-muted text-[10px] font-bold">AI</div>
-                <h3 className="text-sm font-semibold text-foreground">Generative Hybrid Pipeline</h3>
-                <p className="text-xs text-muted leading-relaxed">We blend OpenCV structural alignment with Generative AI to preserve crisp window views and natural shadows without halos.</p>
+                <h3 className="text-sm font-semibold text-foreground">{t('generative_hybrid_title')}</h3>
+                <p className="text-xs text-muted leading-relaxed">{t('generative_hybrid_body')}</p>
              </div>
              <div className="flex flex-col items-center gap-3">
                 <CheckCircle2 className="w-6 h-6 text-muted" />
-                <h3 className="text-sm font-semibold text-foreground">MLS Optimized Output</h3>
-                <p className="text-xs text-muted leading-relaxed">Final images are rendered at 2K resolution&mdash;perfectly sized and optimized for Multiple Listing Service (MLS) delivery.</p>
+                <h3 className="text-sm font-semibold text-foreground">{t('mls_optimized_output_title')}</h3>
+                <p className="text-xs text-muted leading-relaxed">{t('mls_optimized_output_body')}</p>
              </div>
           </div>
         </div>
@@ -800,8 +806,10 @@ export default function UploadFlow() {
                     return (
                         <div key={group.id} className="flex flex-col gap-3">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-foreground">Scene {idx + 1}</h3>
-                                <span className="text-xs text-muted bg-foreground/5 px-2 py-1 rounded">{group.photos.length} brackets</span>
+                                <h3 className="text-sm font-semibold text-foreground">{t('scene_label').replace('{index}', String(idx + 1))}</h3>
+                                <span className="text-xs text-muted bg-foreground/5 px-2 py-1 rounded">
+                                  {group.photos.length} {t('brackets_label')}
+                                </span>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                                 {sortedPhotos.map((photo, pIdx) => (
@@ -832,7 +840,7 @@ export default function UploadFlow() {
            
            <div className="mt-6 flex items-start gap-3 bg-warning/10 border border-warning/20 p-4 rounded-lg text-sm text-warning">
               <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-              <p>Please review the scene groupings above. If the algorithm grouped a bathroom with a hallway, your camera&apos;s clock or burst speed may be irregular. If so, cancel and upload them separately.</p>
+              <p>{t('review_scene_groupings_warning')}</p>
            </div>
         </div>
       )}
@@ -856,7 +864,7 @@ export default function UploadFlow() {
             
             <p className="mt-8 text-xs text-muted text-center flex items-center gap-2 bg-surface px-4 py-2 rounded-full border border-border">
                <Info className="w-4 h-4" />
-               Please leave this window open until the upload completes.
+               {t('upload_keep_window_open')}
             </p>
          </div>
       )}

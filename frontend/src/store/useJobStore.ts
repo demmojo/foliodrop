@@ -4,8 +4,14 @@ import { getLocalAnonAgencyId, getScopedAuthHeaders } from '@/lib/requestHeaders
 export interface ProcessedHDR {
   id: string;
   url: string;
+  urlExpiresAt?: number;
   thumbUrl?: string;
+  thumbUrlExpiresAt?: number;
   originalUrl?: string; 
+  originalUrlExpiresAt?: number;
+  blobPath?: string;
+  thumbBlobPath?: string;
+  originalBlobPath?: string;
   sceneName: string;
   status: string;
   isFlagged?: boolean;
@@ -52,6 +58,9 @@ interface JobStore {
   uploadStyleProfile: (file: File) => Promise<void>;
   uploadTrainingPair: (brackets: File[], finalEdit: File) => Promise<void>;
   overrideWithManualEdit: (jobId: string, file: File) => Promise<void>;
+  startPolling: () => void;
+  stopPolling: () => void;
+  refreshResultUrls: (jobIds: string[]) => Promise<void>;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -118,6 +127,28 @@ const fileToDataUrl = (file: File): Promise<string> =>
     reader.onload = () => resolve(String(reader.result || ''));
     reader.readAsDataURL(file);
   });
+
+const normalizeResult = (jobData: any): ProcessedHDR | undefined => {
+  if (!jobData?.result) return undefined;
+  return {
+    id: jobData.id,
+    url: jobData.result.url,
+    urlExpiresAt: jobData.result.url_expires_at,
+    thumbUrl: jobData.result.thumb_url || jobData.result.url,
+    thumbUrlExpiresAt: jobData.result.thumb_url_expires_at || jobData.result.url_expires_at,
+    originalUrl: jobData.result.original_url || jobData.result.original_blob_path,
+    originalUrlExpiresAt: jobData.result.original_url_expires_at || jobData.result.url_expires_at,
+    blobPath: jobData.result.blob_path,
+    thumbBlobPath: jobData.result.thumb_blob_path,
+    originalBlobPath: jobData.result.original_blob_path,
+    sceneName: jobData.result.room,
+    status: 'NEEDS_REVIEW',
+    isFlagged: jobData.result.isFlagged,
+    vlmReport: jobData.result.vlmReport
+  };
+};
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 export const useJobStore = create<JobStore>((set, get) => ({
   jobs: {},
@@ -254,17 +285,23 @@ export const useJobStore = create<JobStore>((set, get) => ({
       
       if (!res.ok) {
         console.error("Failed to override with manual edit");
+        return;
       }
-      
-      // Update local state optimistic/mock if backend isn't ready
-      const mockUrl = URL.createObjectURL(file);
+      const payload = await res.json().catch(() => ({}));
+      const fallbackBlobUrl = URL.createObjectURL(file);
       set((state) => {
         const updatedJobs = { ...state.jobs };
         if (updatedJobs[jobId] && updatedJobs[jobId].result) {
+          const previous = updatedJobs[jobId].result!;
+          [previous.url, previous.thumbUrl].forEach((u) => {
+            if (u?.startsWith('blob:')) URL.revokeObjectURL(u);
+          });
           updatedJobs[jobId].result = {
-            ...updatedJobs[jobId].result!,
-            url: mockUrl,
-            thumbUrl: mockUrl,
+            ...previous,
+            url: payload.url || fallbackBlobUrl,
+            thumbUrl: payload.thumb_url || payload.url || fallbackBlobUrl,
+            blobPath: payload.blob_path || previous.blobPath,
+            thumbBlobPath: payload.thumb_blob_path || previous.thumbBlobPath,
             status: 'APPROVED',
           };
           updatedJobs[jobId].status = 'COMPLETED';
@@ -321,16 +358,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
               id: jobData.id,
               status: jobData.status,
               nextPollAt: now,
-              result: jobData.result ? {
-                  id: jobData.id,
-                  url: jobData.result.url,
-                  thumbUrl: jobData.result.thumb_url || jobData.result.url,
-                  originalUrl: jobData.result.original_url || jobData.result.original_blob_path,
-                  sceneName: jobData.result.room,
-                  status: 'NEEDS_REVIEW',
-                  isFlagged: jobData.result.isFlagged,
-                  vlmReport: jobData.result.vlmReport
-              } : undefined,
+              result: normalizeResult(jobData),
               error: jobData.error
             };
           });
@@ -387,16 +415,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
             // Backend returns COMPLETED or FLAGGED for reviewable jobs; both ship signed
             // URLs and need to be normalized into the ProcessedHDR shape.
             if (jobData.result && (jobData.status === 'COMPLETED' || jobData.status === 'FLAGGED')) {
-                updatedJobs[jobData.id].result = {
-                    id: jobData.id,
-                    url: jobData.result.url,
-                    thumbUrl: jobData.result.thumb_url || jobData.result.url,
-                    originalUrl: jobData.result.original_url || jobData.result.original_blob_path,
-                    sceneName: jobData.result.room,
-                    status: 'NEEDS_REVIEW',
-                    isFlagged: jobData.result.isFlagged,
-                    vlmReport: jobData.result.vlmReport
-                };
+                updatedJobs[jobData.id].result = normalizeResult(jobData);
             }
           });
           
@@ -406,12 +425,55 @@ export const useJobStore = create<JobStore>((set, get) => ({
     } catch (error) {
       console.error("Batch polling failed", error);
     }
-  }
-}));
+  },
 
-// Set up the centralized ticker
-if (typeof window !== 'undefined') {
-  setInterval(() => {
-    useJobStore.getState().pollDueJobs();
-  }, 2000);
-}
+  refreshResultUrls: async (jobIds: string[]) => {
+    if (!jobIds.length) return;
+    const state = get();
+    const requests = jobIds
+      .map((jobId) => ({ jobId, result: state.jobs[jobId]?.result }))
+      .filter((entry) => entry.result && (entry.result.thumbBlobPath || entry.result.blobPath));
+    if (!requests.length) return;
+
+    const blobPaths = requests.map((entry) => entry.result!.thumbBlobPath || entry.result!.blobPath!).filter(Boolean);
+    const headers = await getScopedAuthHeaders({ includeContentTypeJson: true });
+    const res = await fetch(`${API_URL}/api/v1/jobs/batch-signed-url`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ blob_paths: blobPaths })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const byPath = new Map<string, { path: string; url: string; expires_at: number }>(
+      (data.urls || []).map((item: any) => [item.path, item])
+    );
+
+    set((prev) => {
+      const updatedJobs = { ...prev.jobs };
+      for (const { jobId, result } of requests) {
+        const path = result!.thumbBlobPath || result!.blobPath;
+        const signed = byPath.get(path as string);
+        if (!signed || !updatedJobs[jobId]?.result) continue;
+        updatedJobs[jobId].result = {
+          ...updatedJobs[jobId].result!,
+          thumbUrl: signed.url,
+          thumbUrlExpiresAt: signed.expires_at,
+        };
+      }
+      return { jobs: updatedJobs };
+    });
+  },
+
+  startPolling: () => {
+    if (typeof window === 'undefined' || pollTimer) return;
+    pollTimer = setInterval(() => {
+      useJobStore.getState().pollDueJobs();
+    }, 2000);
+  },
+
+  stopPolling: () => {
+    if (!pollTimer) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+  },
+}));

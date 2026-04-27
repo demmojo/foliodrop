@@ -7,6 +7,7 @@ class FakeDatabase(IDatabase):
         self.sessions = {}
         self.results = {}
         self.jobs = {}
+        self.blob_index = {}
         self.quotas = {"default": {"used": 0.0, "limit": 50.0}}
         
     def save_session(self, session_id: str, data: dict):
@@ -31,6 +32,11 @@ class FakeDatabase(IDatabase):
             self.jobs[job_id]["agency_id"] = agency_id
         if result is not None:
             self.jobs[job_id]["result"] = result
+            resolved_agency = agency_id or result.get("agency_id")
+            if resolved_agency:
+                for path in (result.get("blob_path"), result.get("thumb_blob_path"), result.get("original_blob_path")):
+                    if path:
+                        self.blob_index[path] = resolved_agency
         if error is not None:
             self.jobs[job_id]["error"] = error
 
@@ -51,6 +57,8 @@ class FakeDatabase(IDatabase):
 
     def is_blob_path_owned_by_agency(self, blob_path: str, agency_id: str) -> bool:
         if blob_path.startswith(f"style_profiles/{agency_id}/") or blob_path.startswith(f"training_pairs/{agency_id}/"):
+            return True
+        if self.blob_index.get(blob_path) == agency_id:
             return True
         for job in self.jobs.values():
             result = job.get("result") or {}

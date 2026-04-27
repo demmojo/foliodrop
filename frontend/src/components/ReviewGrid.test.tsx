@@ -2,10 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import ReviewGrid from './ReviewGrid';
 import { ProcessedHDR } from '../store/useJobStore';
+import * as store from '../store/useJobStore';
 
 // Mock BeforeAfterSlider
 vi.mock('./BeforeAfterSlider', () => ({
   default: () => <div data-testid="mock-before-after-slider">Slider</div>
+}));
+
+vi.mock('@/lib/requestHeaders', () => ({
+  getScopedAuthHeaders: vi.fn().mockResolvedValue({ 'Content-Type': 'application/json', 'x-agency-id': 'anon_test' }),
 }));
 
 describe('ReviewGrid Component', () => {
@@ -18,7 +23,10 @@ describe('ReviewGrid Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useStoreSpy.mockReturnValue(vi.fn());
   });
+
+  const useStoreSpy = vi.spyOn(store, 'useJobStore');
 
   it('handles image error by refreshing the src via fetch', async () => {
     // Re-render with realistic URL to hit the `URL(originalUrl)` branch
@@ -46,6 +54,27 @@ describe('ReviewGrid Component', () => {
       fireEvent.error(img);
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('proactively refreshes expiring signed URLs', async () => {
+    const refreshMock = vi.fn().mockResolvedValue(undefined);
+    useStoreSpy.mockReturnValue(refreshMock);
+    const expiringPhotos: ProcessedHDR[] = [
+      {
+        id: 'expiring-1',
+        url: 'http://example.com/exp.jpg',
+        thumbUrl: 'http://example.com/exp-thumb.jpg',
+        thumbBlobPath: 'session/thumb.jpg',
+        thumbUrlExpiresAt: Math.floor(Date.now() / 1000) + 30,
+        sceneName: 'Expiring Room',
+        status: 'READY',
+      },
+    ];
+
+    render(<ReviewGrid photos={expiringPhotos} onConfirm={vi.fn()} />);
+
+    await act(async () => Promise.resolve());
+    expect(refreshMock).toHaveBeenCalledWith(['expiring-1']);
   });
   
   it('handles image error with invalid URL gracefully', async () => {
@@ -114,10 +143,12 @@ describe('ReviewGrid Component', () => {
     
     // In queue
     expect(screen.getByText('Living Room')).toBeInTheDocument();
+    expect(screen.getByTestId('review-reason')).toHaveTextContent('Too bright');
     
     // In grid
     expect(screen.getByText('Kitchen')).toBeInTheDocument();
     expect(screen.getByText('Bedroom')).toBeInTheDocument();
+    expect(screen.getByText('Too bright')).toBeInTheDocument();
   });
 
   it('handles action callbacks for queue items', () => {

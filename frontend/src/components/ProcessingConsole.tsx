@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useJobStore } from '../store/useJobStore';
 import { Info, Loader2, Copy, Check, ChevronRight, AlertTriangle, ImageIcon } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface ProcessingConsoleProps {
   sessionId: string | null;
@@ -11,7 +12,8 @@ interface ProcessingConsoleProps {
 }
 
 export default function ProcessingConsole({ sessionId, expectedScenes = 1, onComplete }: ProcessingConsoleProps) {
-  const { jobs } = useJobStore();
+  const { jobs, startPolling, stopPolling } = useJobStore();
+  const { t } = useTranslation();
   
   const [realProgress, setRealProgress] = useState<number>(0);
   const [displayProgress, setDisplayProgress] = useState<number>(0);
@@ -25,6 +27,12 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
   const sessionJobs = Object.values(jobs).filter(j => j.status !== 'PENDING'); 
   const totalJobs = Math.max(expectedScenes, sessionJobs.length);
   
+  useEffect(() => {
+    if (!sessionId) return;
+    startPolling();
+    return () => stopPolling();
+  }, [sessionId, startPolling, stopPolling]);
+
   useEffect(() => {
     if (!sessionId) return;
     
@@ -70,7 +78,7 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
   return (
     <div className="w-full max-w-2xl text-center px-6 animate-in fade-in duration-500 flex flex-col items-center">
       <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-8 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/60">
-        Processing Your Shoot
+        {t('processing_your_shoot')}
       </h2>
       
       {/* Real-time Job Status Grid */}
@@ -112,7 +120,7 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
                    ) : isFailed ? (
                       <div className="flex flex-col items-center gap-2 text-warning/80 relative z-10">
                          <AlertTriangle className="w-5 h-5" />
-                         <span className="text-[10px] font-medium uppercase tracking-wider">Failed</span>
+                        <span className="text-[10px] font-medium uppercase tracking-wider">{t('status_failed')}</span>
                       </div>
                    ) : (
                       <>
@@ -137,7 +145,7 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
                                <div className="absolute inset-0 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
                             </div>
                             <span className="text-[10px] uppercase font-bold tracking-widest text-white/90 shadow-black drop-shadow-md">
-                               {job.status === 'PENDING' ? 'Queued' : 'Processing'}
+                               {job.status === 'PENDING' ? t('job_queued') : t('processing')}
                             </span>
                          </div>
                       </>
@@ -181,16 +189,16 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
             <Info className="w-4 h-4 text-foreground/80" />
          </div>
          <div>
-            <h4 className="text-sm font-semibold text-foreground mb-1">Safe to leave this page</h4>
+            <h4 className="text-sm font-semibold text-foreground mb-1">{t('safe_leave_title')}</h4>
             <p className="text-xs text-muted leading-relaxed font-medium">
-               Generative processing takes time. We&apos;ll handle everything in the background. You can use your session code to resume later.
+               {t('safe_leave_body')}
             </p>
          </div>
       </div>
 
       {sessionId && (
         <div className="mt-8 flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">Session Code (Retention Policy Applies)</p>
+           <p className="text-xs text-muted mb-3 font-medium uppercase tracking-wider">{t('session_code_retention_applies')}</p>
            <div className="flex items-center gap-2 bg-surface border border-border pl-4 pr-1 py-1 rounded-full shadow-sm">
              <code className="text-sm font-mono text-foreground font-medium select-all">{sessionId}</code>
              <button
@@ -200,7 +208,7 @@ export default function ProcessingConsole({ sessionId, expectedScenes = 1, onCom
                  setTimeout(() => setHasCopied(false), 2000);
                }}
                className="p-2 hover:bg-foreground/5 rounded-full transition-colors ml-2"
-               title="Copy to clipboard"
+               title={t('copy_to_clipboard')}
              >
                {hasCopied ? (
                  <Check className="w-4 h-4 text-emerald-500" />

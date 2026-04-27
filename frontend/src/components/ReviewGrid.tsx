@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import BeforeAfterSlider from './BeforeAfterSlider';
-import { ProcessedHDR } from '../store/useJobStore';
+import { ProcessedHDR, useJobStore } from '../store/useJobStore';
+import { getScopedAuthHeaders } from '@/lib/requestHeaders';
 
 interface ReviewGridProps {
   photos: ProcessedHDR[];
@@ -16,11 +17,38 @@ interface ReviewGridProps {
 
 export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepItem, onOverrideWithManualEdit, onStartNewSession }: ReviewGridProps) {
   const [loupeImage, setLoupeImage] = useState<ProcessedHDR | null>(null);
+  const refreshResultUrls = useJobStore((state) => state.refreshResultUrls);
 
   const reviewQueue = photos?.filter(p => p.isFlagged || p.status === 'NEEDS_REVIEW' || p.status === 'FLAGGED') || [];
   const cargoGrid = photos?.filter(p => !p.isFlagged && p.status === 'READY') || [];
 
-  const handleImageError = async (e: React.SyntheticEvent<HTMLImageElement, Event>, originalUrl: string) => {
+  useEffect(() => {
+    if (!photos?.length) return;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const expiringSoonIds = photos
+      .filter((photo) => Boolean(photo.thumbBlobPath || photo.blobPath))
+      .filter((photo) => {
+        const expiresAt = photo.thumbUrlExpiresAt || photo.urlExpiresAt;
+        return typeof expiresAt === 'number' && expiresAt - nowSeconds <= 120;
+      })
+      .map((photo) => photo.id);
+    if (expiringSoonIds.length > 0) {
+      refreshResultUrls(expiringSoonIds).catch((err) => {
+        console.error('Failed to proactively refresh signed URLs', err);
+      });
+    }
+  }, [photos, refreshResultUrls]);
+
+  const getFailureReason = (photo: ProcessedHDR): string | null => {
+    const reason = photo.vlmReport?.reason;
+    return typeof reason === 'string' && reason.trim().length > 0 ? reason : null;
+  };
+
+  const handleImageError = async (
+    e: React.SyntheticEvent<HTMLImageElement, Event>,
+    originalUrl: string,
+    blobPath?: string
+  ) => {
       // Very basic URL refresh logic
       const target = e.currentTarget;
       // Prevent infinite loops if the URL keeps failing
@@ -29,26 +57,27 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
 
       try {
           const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-          // We need to extract the raw path from the signed URL if possible, 
-          // or we just assume we can call an endpoint to get a fresh one based on some path.
-          // For simplicity, let's assume the backend provides a way if we pass the expired URL or path.
-          // In a real implementation we would parse the path from URL.
-          let blobPath = originalUrl;
+          let resolvedPath = blobPath || originalUrl;
           try {
-             if (originalUrl && originalUrl.startsWith('http')) {
+             if (!blobPath && originalUrl && originalUrl.startsWith('http')) {
                  const urlObj = new URL(originalUrl);
-                 blobPath = urlObj.pathname.slice(1); // Remove leading slash
+                 // Signed URLs usually include /<bucket>/<object>; keep only object path.
+                 const parts = urlObj.pathname.split('/').filter(Boolean);
+                 resolvedPath = parts.length >= 2 ? parts.slice(1).join('/') : urlObj.pathname.slice(1);
              }
           } catch (e) {
              // Fallback
              console.error("Failed to parse originalUrl as URL", e);
           }
 
+          const headers = await getScopedAuthHeaders({ includeContentTypeJson: true });
+
           const res = await fetch(`${API_URL}/api/v1/jobs/batch-signed-url`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ blob_paths: [blobPath] })
+              headers,
+              body: JSON.stringify({ blob_paths: [resolvedPath] })
           });
+          if (!res.ok) return;
           const data = await res.json();
           if (data.urls && data.urls[0] && data.urls[0].url) {
               target.src = data.urls[0].url;
@@ -78,7 +107,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                        <img 
                           src={photo.thumbUrl || photo.url} 
                           alt={photo.sceneName || 'Room Image'} 
-                          onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '')}
+                          onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '', photo.thumbBlobPath || photo.blobPath)}
                           className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
                        />
                    ) : (
@@ -119,6 +148,11 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                         )}
                     </div>
                 </div>
+                {getFailureReason(photo) && (
+                  <p className="text-xs text-warning/90 leading-relaxed" data-testid="review-reason">
+                    {getFailureReason(photo)}
+                  </p>
+                )}
                 
               </div>
             ))}
@@ -160,7 +194,7 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
                         <img 
                             src={photo.thumbUrl || photo.url} 
                             alt={photo.sceneName || 'Room Image'} 
-                            onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '')}
+                            onError={(e) => handleImageError(e, photo.thumbUrl || photo.url || '', photo.thumbBlobPath || photo.blobPath)}
                             className="object-cover w-full h-full opacity-90 group-hover:opacity-100 transition-opacity" 
                         />
                     )}
@@ -206,12 +240,28 @@ export default function ReviewGrid({ photos, onConfirm, onDiscardItem, onKeepIte
               </div>
               <div className="flex-1 overflow-hidden relative flex items-center justify-center p-4 md:p-8">
                  <div className="w-full max-w-6xl aspect-[3/2] relative bg-[#111]">
-                    <BeforeAfterSlider 
-                       beforeUrl={loupeImage.originalUrl || loupeImage.url} 
-                       afterUrl={loupeImage.url} 
-                    />
+                   {loupeImage.originalUrl && loupeImage.originalUrl !== loupeImage.url ? (
+                     <BeforeAfterSlider 
+                        beforeUrl={loupeImage.originalUrl} 
+                        afterUrl={loupeImage.url}
+                        onBeforeError={(e) => handleImageError(e, loupeImage.originalUrl || '', loupeImage.originalBlobPath || loupeImage.blobPath)}
+                        onAfterError={(e) => handleImageError(e, loupeImage.url || '', loupeImage.blobPath)}
+                     />
+                   ) : (
+                     <img
+                       src={loupeImage.url}
+                       alt={loupeImage.sceneName || 'Room Image'}
+                       onError={(e) => handleImageError(e, loupeImage.url || '', loupeImage.blobPath)}
+                       className="w-full h-full object-contain"
+                     />
+                   )}
                  </div>
               </div>
+              {getFailureReason(loupeImage) && (
+                <div className="px-4 py-3 text-center text-sm text-warning border-t border-white/10 bg-[#111]">
+                  {getFailureReason(loupeImage)}
+                </div>
+              )}
               <div className="p-4 border-t border-white/10 flex justify-center gap-2 sm:gap-4 bg-[#111] pb-safe">
                  {onOverrideWithManualEdit && (
                      <label className="flex items-center justify-center min-h-[44px] px-4 sm:px-6 py-3 sm:py-2 bg-info/20 hover:bg-info/40 text-info rounded text-xs sm:text-sm transition-colors uppercase tracking-wider flex-1 sm:flex-none text-center cursor-pointer">

@@ -7,9 +7,18 @@ interface BeforeAfterSliderProps {
   afterUrl: string;
   className?: string;
   objectFit?: 'cover' | 'contain';
+  onBeforeError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
+  onAfterError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
 }
 
-export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, objectFit = 'cover' }: BeforeAfterSliderProps) {
+export default function BeforeAfterSlider({
+  beforeUrl,
+  afterUrl,
+  className,
+  objectFit = 'cover',
+  onBeforeError,
+  onAfterError,
+}: BeforeAfterSliderProps) {
   const { t } = useTranslation();
   const [sliderPosition, setSliderPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
@@ -99,6 +108,7 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
         src={beforeUrl} 
         alt="Original Exposure"
         onLoad={() => setBeforeLoaded(true)}
+        onError={onBeforeError}
         className={clsx(
           "absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-300",
           objectFit === 'cover' ? 'object-cover' : 'object-contain',
@@ -119,6 +129,7 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className, obje
           src={afterUrl} 
           alt="Fused HDR Result"
           onLoad={() => setAfterLoaded(true)}
+          onError={onAfterError}
           className={clsx(
             "absolute inset-0 w-full h-full pointer-events-none",
             objectFit === 'cover' ? 'object-cover' : 'object-contain'

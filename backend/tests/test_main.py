@@ -123,6 +123,12 @@ def test_get_active_jobs():
     jobs = resp.json()["jobs"]
     assert len(jobs) == 5
     assert "original_url" in jobs[0]["result"]
+    assert isinstance(jobs[0]["result"].get("url_expires_at"), int)
+    assert isinstance(jobs[0]["result"].get("thumb_url_expires_at"), int)
+    assert isinstance(jobs[0]["result"].get("original_url_expires_at"), int)
+    assert "url_expires_at" in jobs[0]["result"]
+    assert "thumb_url_expires_at" in jobs[0]["result"]
+    assert "original_url_expires_at" in jobs[0]["result"]
 
 def test_get_active_jobs_includes_signed_urls_for_flagged():
     from backend.main import get_database
@@ -186,6 +192,8 @@ def test_batch_signed_url():
     resp = client.post("/api/v1/jobs/batch-signed-url", json=req)
     assert resp.status_code == 200
     assert len(resp.json()["urls"]) == 2
+    assert all(isinstance(item.get("expires_at"), int) for item in resp.json()["urls"])
+    assert all("expires_at" in item for item in resp.json()["urls"])
 
 def test_override_job_image_error():
     from backend.tests.fakes import FakeBlobStorage
@@ -336,6 +344,63 @@ def test_batch_signed_url_rejects_unowned_paths():
     assert resp.status_code == 200
     paths = [u["path"] for u in resp.json()["urls"]]
     assert paths == ["style_profiles/default/ok"]
+
+
+def test_result_level_agency_fallback_is_honored_for_visibility_and_signing():
+    from backend.main import get_database
+    db = get_database()
+    db.save_job(
+        "job_result_agency",
+        "session_result_agency",
+        "COMPLETED",
+        "key_result_agency",
+        result={
+            "agency_id": "default",
+            "blob_path": "session_result_agency/hdr.jpg",
+            "thumb_blob_path": "session_result_agency/thumb.webp",
+            "original_blob_path": "session_result_agency/original.jpg",
+        },
+        agency_id=None,
+    )
+
+    active = client.get("/api/v1/jobs/active?session_id=session_result_agency")
+    assert active.status_code == 200
+    jobs = active.json()["jobs"]
+    assert len(jobs) == 1
+    assert jobs[0]["id"] == "job_result_agency"
+
+    signed = client.post(
+        "/api/v1/jobs/batch-signed-url",
+        json={"blob_paths": ["session_result_agency/thumb.webp"]},
+    )
+    assert signed.status_code == 200
+    assert signed.json()["urls"][0]["path"] == "session_result_agency/thumb.webp"
+
+
+def test_batch_signed_url_accepts_nested_result_agency_ownership():
+    from backend.main import get_database
+    db = get_database()
+    db.save_job(
+        "job_nested_agency",
+        "sess_nested",
+        "COMPLETED",
+        "key_nested",
+        result={
+            "blob_path": "sess_nested/hdr_kitchen.jpg",
+            "thumb_blob_path": "sess_nested/thumb_kitchen.webp",
+            "original_blob_path": "sess_nested/raw_kitchen.jpg",
+            "agency_id": "default",
+        },
+    )
+    resp = client.post(
+        "/api/v1/jobs/batch-signed-url",
+        json={"blob_paths": ["sess_nested/thumb_kitchen.webp"]},
+    )
+    assert resp.status_code == 200
+    urls = resp.json()["urls"]
+    assert len(urls) == 1
+    assert urls[0]["path"] == "sess_nested/thumb_kitchen.webp"
+    assert "expires_at" in urls[0]
 
 
 def test_validate_production_security_config_requires_expected_invoker():

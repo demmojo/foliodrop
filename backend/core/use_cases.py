@@ -189,9 +189,15 @@ class ProcessHdrGroupUseCase:
                     (int(w * thumb_scale), int(h * thumb_scale)),
                     interpolation=cv2.INTER_AREA,
                 )
-                _, encoded_thumb = cv2.imencode(
+                thumb_ok, encoded_thumb = cv2.imencode(
                     ".webp", thumb_img, [cv2.IMWRITE_WEBP_QUALITY, 80]
                 )
+                if not thumb_ok:
+                    thumb_ok, encoded_thumb = cv2.imencode(
+                        ".jpg", thumb_img, [cv2.IMWRITE_JPEG_QUALITY, 85]
+                    )
+                    if not thumb_ok:
+                        raise RuntimeError("Failed to encode fallback thumbnail image")
                 fallback_thumb_bytes = encoded_thumb.tobytes()
 
                 final_filename = f"hdr_{room.replace(' ', '_')}_{uuid.uuid4().hex[:8]}.jpg"
@@ -402,7 +408,11 @@ class ProcessHdrGroupUseCase:
             h, w = final_bgr_8bit.shape[:2]
             thumb_scale = 800 / max(h, w)
             thumb_img = cv2.resize(final_bgr_8bit, (int(w * thumb_scale), int(h * thumb_scale)), interpolation=cv2.INTER_AREA)
-            _, encoded_thumb = cv2.imencode('.webp', thumb_img, [cv2.IMWRITE_WEBP_QUALITY, 80])
+            thumb_ok, encoded_thumb = cv2.imencode('.webp', thumb_img, [cv2.IMWRITE_WEBP_QUALITY, 80])
+            if not thumb_ok:
+                thumb_ok, encoded_thumb = cv2.imencode('.jpg', thumb_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                if not thumb_ok:
+                    raise RuntimeError("Failed to encode thumbnail image")
             thumb_bytes = encoded_thumb.tobytes()
             
             del final_bgr_8bit

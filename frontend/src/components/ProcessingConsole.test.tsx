@@ -14,20 +14,21 @@ describe('ProcessingConsole Component', () => {
   });
 
   afterEach(() => {
+    useJobStore.getState().stopPolling();
     vi.useRealTimers();
   });
 
   it('renders initial state', () => {
     render(<ProcessingConsole sessionId="sess1" expectedScenes={2} onComplete={vi.fn()} />);
     
-    expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
+    expect(screen.getByText('processing_your_shoot')).toBeInTheDocument();
   });
 
   it('handles null sessionId gracefully', () => {
     render(<ProcessingConsole sessionId={null} expectedScenes={2} onComplete={vi.fn()} />);
     
     // Should still render but not trigger useEffect processing logic
-    expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
+    expect(screen.getByText('processing_your_shoot')).toBeInTheDocument();
   });
 
   it('updates progress when jobs complete and triggers onComplete', () => {
@@ -61,7 +62,7 @@ describe('ProcessingConsole Component', () => {
     render(<ProcessingConsole sessionId="sess1" expectedScenes={2} onComplete={vi.fn()} />);
     
     // Initial display progress is 5%
-    expect(screen.getByText('Processing Your Shoot')).toBeInTheDocument();
+    expect(screen.getByText('processing_your_shoot')).toBeInTheDocument();
 
     for (let i = 0; i < 60; i++) {
       act(() => {
@@ -73,7 +74,7 @@ describe('ProcessingConsole Component', () => {
     });
 
     // Should creep past 20%
-    expect(screen.getByText(/Processing Your Shoot/i)).toBeInTheDocument();
+    expect(screen.getByText(/processing_your_shoot/i)).toBeInTheDocument();
 
     // Now let's simulate some actual jobs finishing to bump realProgress
     act(() => {
@@ -94,7 +95,7 @@ describe('ProcessingConsole Component', () => {
     });
 
     // Should creep past 50%
-    expect(screen.getByText(/Processing Your Shoot/i)).toBeInTheDocument();
+    expect(screen.getByText(/processing_your_shoot/i)).toBeInTheDocument();
     
     // Now push realProgress to something that allows creep > 80
     act(() => {
@@ -127,7 +128,7 @@ describe('ProcessingConsole Component', () => {
       });
     });
     
-    expect(screen.getByText(/Processing Your Shoot/i)).toBeInTheDocument();
+    expect(screen.getByText(/processing_your_shoot/i)).toBeInTheDocument();
   });
 
   it('copies session code to clipboard', async () => {
@@ -142,7 +143,7 @@ describe('ProcessingConsole Component', () => {
 
     render(<ProcessingConsole sessionId="test-session-123" expectedScenes={2} onComplete={vi.fn()} />);
     
-    const copyBtn = screen.getByTitle('Copy to clipboard');
+    const copyBtn = screen.getByTitle('copy_to_clipboard');
     
     act(() => {
       copyBtn.click();

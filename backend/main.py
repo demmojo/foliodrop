@@ -124,6 +124,16 @@ class BatchStatusRequest(BaseModel):
 class BatchSignedUrlRequest(BaseModel):
     blob_paths: List[str]
 
+
+class SignedUrlItem(BaseModel):
+    path: str
+    url: str
+    expires_at: int
+
+
+class SignedUrlBatchResponse(BaseModel):
+    urls: List[SignedUrlItem]
+
 class GroupPhotosRequest(BaseModel):
     files: List[dict]  # {"name": "...", "thumbnail": "base64..."}
 
@@ -133,6 +143,19 @@ class GroupPhotosRequest(BaseModel):
 import random
 from backend.core.auth import get_current_agency_id
 from backend.session_words import STYLES, RESIDENCES
+
+
+def _resolve_job_agency(job: dict) -> Optional[str]:
+    return job.get("agency_id") or (job.get("result") or {}).get("agency_id")
+
+
+def _build_signed_url_payload(storage: IBlobStorage, blob_path: str, expiration_minutes: int = 60) -> dict:
+    expires_at = int(datetime.now(timezone.utc).timestamp()) + (expiration_minutes * 60)
+    return {
+        "path": blob_path,
+        "url": storage.generate_signed_url(blob_path, expiration_minutes=expiration_minutes),
+        "expires_at": expires_at,
+    }
 
 def generate_random_code(fallback=False):
     style = random.choice(STYLES)
@@ -347,7 +370,7 @@ def get_active_jobs(
     
     response_jobs = []
     for job in jobs:
-        job_agency = job.get("agency_id") or (job.get("result") or {}).get("agency_id")
+        job_agency = _resolve_job_agency(job)
         if job_agency != agency_id:
             continue
         job_status = {
@@ -360,11 +383,17 @@ def get_active_jobs(
         # If reviewable, generate signed URLs
         if job["status"] in {"COMPLETED", "FLAGGED"} and "result" in job:
             if "blob_path" in job["result"]:
-                job_status["result"]["url"] = storage.generate_signed_url(job["result"]["blob_path"])
+                signed = _build_signed_url_payload(storage, job["result"]["blob_path"], expiration_minutes=60)
+                job_status["result"]["url"] = signed["url"]
+                job_status["result"]["url_expires_at"] = signed["expires_at"]
             if "thumb_blob_path" in job["result"]:
-                job_status["result"]["thumb_url"] = storage.generate_signed_url(job["result"]["thumb_blob_path"])
+                signed = _build_signed_url_payload(storage, job["result"]["thumb_blob_path"], expiration_minutes=60)
+                job_status["result"]["thumb_url"] = signed["url"]
+                job_status["result"]["thumb_url_expires_at"] = signed["expires_at"]
             if "original_blob_path" in job["result"]:
-                job_status["result"]["original_url"] = storage.generate_signed_url(job["result"]["original_blob_path"])
+                signed = _build_signed_url_payload(storage, job["result"]["original_blob_path"], expiration_minutes=60)
+                job_status["result"]["original_url"] = signed["url"]
+                job_status["result"]["original_url_expires_at"] = signed["expires_at"]
                 
         response_jobs.append(job_status)
         
@@ -381,7 +410,7 @@ def get_batch_status(
     
     response_jobs = []
     for job in jobs:
-        job_agency = job.get("agency_id") or (job.get("result") or {}).get("agency_id")
+        job_agency = _resolve_job_agency(job)
         if job_agency != agency_id:
             continue
         job_status = {
@@ -395,11 +424,17 @@ def get_batch_status(
         # If reviewable, generate signed URLs
         if job["status"] in {"COMPLETED", "FLAGGED"} and "result" in job:
             if "blob_path" in job["result"]:
-                job_status["result"]["url"] = storage.generate_signed_url(job["result"]["blob_path"])
+                signed = _build_signed_url_payload(storage, job["result"]["blob_path"], expiration_minutes=60)
+                job_status["result"]["url"] = signed["url"]
+                job_status["result"]["url_expires_at"] = signed["expires_at"]
             if "thumb_blob_path" in job["result"]:
-                job_status["result"]["thumb_url"] = storage.generate_signed_url(job["result"]["thumb_blob_path"])
+                signed = _build_signed_url_payload(storage, job["result"]["thumb_blob_path"], expiration_minutes=60)
+                job_status["result"]["thumb_url"] = signed["url"]
+                job_status["result"]["thumb_url_expires_at"] = signed["expires_at"]
             if "original_blob_path" in job["result"]:
-                job_status["result"]["original_url"] = storage.generate_signed_url(job["result"]["original_blob_path"])
+                signed = _build_signed_url_payload(storage, job["result"]["original_blob_path"], expiration_minutes=60)
+                job_status["result"]["original_url"] = signed["url"]
+                job_status["result"]["original_url_expires_at"] = signed["expires_at"]
                 
         response_jobs.append(job_status)
         
@@ -414,16 +449,13 @@ def batch_signed_url(
     storage: IBlobStorage = Depends(get_blob_storage),
     db: IDatabase = Depends(get_database),
     agency_id: str = Depends(get_current_agency_id),
-):
+)-> SignedUrlBatchResponse:
     urls = []
     for path in req.blob_paths:
         if not db.is_blob_path_owned_by_agency(path, agency_id):
             continue
-        urls.append({
-            "path": path,
-            "url": storage.generate_signed_url(path)
-        })
-    return {"urls": urls}
+        urls.append(_build_signed_url_payload(storage, path, expiration_minutes=60))
+    return SignedUrlBatchResponse(urls=[SignedUrlItem(**item) for item in urls])
 
 
 def _validate_image_payload(file_name: str, file_data: bytes) -> None:
